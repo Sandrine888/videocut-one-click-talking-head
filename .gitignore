@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Distribution
+*.manifest
+# 保留 videocut.spec (PyInstaller配置)
+!videocut.spec
+
+# Logs
+*.log
+
+# Local config (contains secrets)
+.env
+.credentials
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+*.mp4
+*.mov
+*.avi
+*.wav
+*.srt
+
+# 二次开发新增：构建环境、打包产物与运行期缓存
+venv_build/
+installer/
+*.exe
+*.transcript.json
+
+# 演示、评测与文档流水线的本地产物（不入库）
+output/
+results/
+demo/
+
+# 本地运行配置与 Supabase CLI 缓存
+.videocut/
+supabase/.temp/

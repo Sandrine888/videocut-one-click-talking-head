@@ -1,0 +1,66 @@
+{
+  "_说明": [
+    "这是 VideoCut 的显式 LLM 配置文件：所有 API 地址、模型名称都写在这里，改完立即生效。",
+    "用法：vc.bat --profile <方案名> cut \"你的视频.mp4\"；不带 --profile 时使用下面的 default_profile。",
+    "也可以直接改 default_profile 或某个方案的 model，然后照常 vc.bat cut 视频路径。",
+    "不需要重新打包 videocut.exe，也不需要运行 videocut config 交互菜单。",
+    "新增方案：复制 profiles 里任意一段，改键名（方案名）和里面的 base_url / model 即可。",
+    "字段：provider = openai | anthropic | compatible；base_url 仅 compatible 需要；model 为模型名。",
+    "命令行可临时覆盖：--provider / --base-url / --model（例如 -p 2api --model 别的模型名 cut 视频）。",
+    "API Key 三种写法，优先级从高到低：",
+    "  1) api_key_env: 环境变量名（推荐，例如 DEEPSEEK_API_KEY，值由系统环境变量提供，不落盘）",
+    "  2) api_key: 明文字符串（不推荐，请勿把本文件提交到 git / 发给别人）",
+    "  3) vc.bat --set-key <方案名> 交互式录入，加密保存到 ~/.videocut/profile_keys.json（方案专用，推荐）",
+    "环境变量名写了但没设值时会自动向下回退；以上都没有时，沿用 ~/.videocut/.credentials 中同 provider 已保存的 Key，并自动把它固化为本方案专用。",
+    "注意：程序内部所有 compatible 服务共用同一个 Key 槽位，启动器会为每个方案各存一份专用 Key、每次运行前写回，避免来回切换串号。改 Key 请用 --set-key 覆盖。",
+    "脚本化设置 Key：VIDEOCUT_KEY_FROM_STDIN=1 echo sk-xxx | vc.bat --set-key <方案名>（Windows cmd 请用 set 分两行）"
+  ],
+  "_用法": [
+    "vc.bat --list                                    查看全部方案与当前生效配置",
+    "vc.bat --current                                 只看当前生效配置",
+    "vc.bat --use 2api                                仅切换配置，不运行视频",
+    "vc.bat -p 2api cut \"D:\\video\\a.mp4\"            用 2api 方案剪视频",
+    "vc.bat -p 2api --model 其他模型名 cut \"a.mp4\"    本次临时换模型",
+    "vc.bat --set-key deepseek                        交互式录入并加密保存该方案专用 Key",
+    "vc.bat -p deepseek --dry-run                     只看将要生效的配置，不写入不运行",
+    "vc.bat -p deepseek --no-persist status           临时用一次，运行后自动恢复原配置",
+    "vc.bat --runner-help                             查看启动器全部参数（-h/--help 会透传给 videocut）"
+  ],
+  "default_profile": "2api",
+  "profiles": {
+    "2api": {
+      "description": "2API 中转（当前实测可用；Key 已加密保存在本机）",
+      "provider": "compatible",
+      "base_url": "http://2api.dev/v1",
+      "model": "gpt-5.6-sol"
+    },
+    "deepseek": {
+      "description": "DeepSeek 官方 OpenAI 兼容接口（需先设置环境变量 DEEPSEEK_API_KEY 或 --set-key deepseek）",
+      "provider": "compatible",
+      "base_url": "https://api.deepseek.com/v1",
+      "model": "deepseek-chat",
+      "api_key_env": "DEEPSEEK_API_KEY"
+    },
+    "openai": {
+      "description": "OpenAI 官方（需 OPENAI_API_KEY 或 --set-key openai）",
+      "provider": "openai",
+      "base_url": null,
+      "model": "gpt-4o",
+      "api_key_env": "OPENAI_API_KEY"
+    },
+    "anthropic": {
+      "description": "Anthropic Claude（需 ANTHROPIC_API_KEY 或 --set-key anthropic）",
+      "provider": "anthropic",
+      "base_url": null,
+      "model": "claude-3-5-sonnet-20241022",
+      "api_key_env": "ANTHROPIC_API_KEY"
+    },
+    "local-mock": {
+      "description": "本地离线 mock 服务（先运行 tests/mock_openai.py，端口 8765）",
+      "provider": "compatible",
+      "base_url": "http://127.0.0.1:8765/v1",
+      "model": "mock-model",
+      "api_key": "sk-mock"
+    }
+  }
+}
