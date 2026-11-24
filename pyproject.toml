@@ -38,6 +38,7 @@ dependencies = [
     "torchaudio>=2.0.0",
     "rich>=13.0.0",
     "pyJianYingDraft>=0.1.0",
+    "pysubs2>=1.7.0",
 ]
 
 [project.optional-dependencies]

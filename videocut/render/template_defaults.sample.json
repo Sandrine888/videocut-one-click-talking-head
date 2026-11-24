@@ -1,0 +1,17 @@
+{
+  "orientation": "portrait",
+  "chars_per_line": {"portrait": [12, 16], "landscape": [16, 22]},
+  "max_lines": 2,
+  "safe_area": {"left_pct": 8, "right_pct": 8, "bottom_pct": 15},
+  "font": {"name": "Microsoft YaHei", "size_portrait": 48, "size_landscape": 36},
+  "colors": {
+    "primary": "&H00FFFFFF",
+    "outline": "&H00000000",
+    "highlight": "&H0000FFFF"
+  },
+  "effects": {
+    "fade_in_ms": 120,
+    "highlight_max_per_segment": 1,
+    "badge": {"enabled": true, "position": "top_right", "shrink_when_speaking": true}
+  }
+}

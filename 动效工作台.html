@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>口播动效工作台 · D 模块</title>
+<style>
+/* ============ 主题：暖棕针织 × 冷灰墙面 × 琥珀字幕黄 ============ */
+:root{
+  --bg0:#141119; --bg1:#1d1926; --bg2:#272134; --bg3:#332b44;
+  --line:#3b3350; --line-soft:#2c2740;
+  --ink:#f4eee3; --ink-dim:#b7afc4; --ink-mute:#8d86a0;
+  --amber:#ffc53d; --amber-deep:#e08b1f; --amber-soft:#ffd97a;
+  --cyan:#3fd4e6; --magenta:#ff4f9a; --indigo:#8b7bff;
+  --ok:#3ddc84; --bad:#ff5c5c; --warn:#ffb52e; --info:#58a6ff;
+  --hl:#ffff00;
+  --r:14px; --header-h:58px;
+  --shadow:0 10px 34px rgba(0,0,0,.45);
+  font-size:15px;
+}
+*{box-sizing:border-box; margin:0; padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg0); color:var(--ink);
+  font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC",system-ui,sans-serif;
+  line-height:1.55; overflow-x:hidden; min-height:100vh;
+}
+/* 自定义滚动条 */
+*{scrollbar-width:thin; scrollbar-color:var(--amber-deep) var(--bg1)}
+::-webkit-scrollbar{width:10px; height:10px}
+::-webkit-scrollbar-track{background:var(--bg1); border-radius:8px}
+::-webkit-scrollbar-thumb{background:linear-gradient(180deg,var(--amber-deep),var(--magenta)); border-radius:8px; border:2px solid var(--bg1)}
+::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,var(--amber),var(--magenta))}
+::-webkit-scrollbar-corner{background:var(--bg1)}
+
+/* 背景：极光 + 颗粒 */
+.aurora{position:fixed; inset:0; z-index:-2; overflow:hidden; pointer-events:none}
+.aurora i{position:absolute; border-radius:50%; filter:blur(90px); opacity:.30; will-change:transform}
+.aurora .a1{width:52vw; height:52vw; left:-14vw; top:-18vw; background:radial-gradient(circle,#e08b1f,transparent 65%); animation:drift1 26s ease-in-out infinite alternate}
+.aurora .a2{width:44vw; height:44vw; right:-12vw; top:6vh; background:radial-gradient(circle,#ff4f9a,transparent 65%); opacity:.20; animation:drift2 32s ease-in-out infinite alternate}
+.aurora .a3{width:46vw; height:46vw; left:22vw; bottom:-24vw; background:radial-gradient(circle,#5b4bd0,transparent 65%); opacity:.26; animation:drift3 38s ease-in-out infinite alternate}
+@keyframes drift1{to{transform:translate(9vw,7vh) scale(1.12)}}
+@keyframes drift2{to{transform:translate(-7vw,10vh) scale(.9)}}
+@keyframes drift3{to{transform:translate(-9vw,-6vh) scale(1.15)}}
+.grain{position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:.05;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* ============ 顶栏 ============ */
+header{
+  position:fixed; top:0; left:0; right:0; height:var(--header-h); z-index:50;
+  display:flex; align-items:center; gap:14px; padding:0 20px;
+  background:rgba(20,17,25,.82); backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line-soft);
+}
+header::after{content:""; position:absolute; left:0; right:0; bottom:-1px; height:2px;
+  background:linear-gradient(90deg,var(--amber),var(--magenta) 45%,var(--indigo) 80%,var(--cyan)); opacity:.85}
+.brand{display:flex; align-items:center; gap:10px; min-width:0}
+.brand .mark{width:32px; height:32px; flex:none; border-radius:9px; display:grid; place-items:center;
+  background:linear-gradient(135deg,var(--amber-deep),var(--magenta)); box-shadow:0 0 18px rgba(255,197,61,.35)}
+.brand .mark svg{width:18px; height:18px; stroke:#1b1420}
+.brand h1{font-size:1.02rem; letter-spacing:.02em; white-space:nowrap}
+.brand small{display:block; font-size:.68rem; color:var(--ink-mute); letter-spacing:.14em; font-weight:400}
+nav{display:flex; gap:4px; margin-left:8px}
+nav a{color:var(--ink-dim); text-decoration:none; font-size:.85rem; padding:6px 12px; border-radius:999px; transition:.2s; white-space:nowrap}
+nav a:hover{color:var(--ink); background:var(--bg2)}
+nav a.on{color:#1b1420; background:linear-gradient(90deg,var(--amber),var(--amber-soft)); font-weight:700}
+.head-right{margin-left:auto; display:flex; gap:10px; align-items:center}
+button{font-family:inherit; cursor:pointer}
+.btn{border:1px solid var(--line); background:var(--bg2); color:var(--ink); border-radius:10px;
+  padding:7px 14px; font-size:.85rem; display:inline-flex; align-items:center; gap:7px; transition:.18s; white-space:nowrap}
+.btn:hover{border-color:var(--amber-deep); transform:translateY(-1px); box-shadow:0 4px 14px rgba(224,139,31,.25)}
+.btn:active{transform:translateY(0) scale(.97)}
+.btn.primary{background:linear-gradient(90deg,var(--amber),var(--amber-deep)); color:#221604; font-weight:700; border:none}
+.btn.primary:hover{box-shadow:0 4px 20px rgba(255,197,61,.45)}
+.btn svg{width:15px; height:15px; flex:none}
+#btnMute{min-width:104px; justify-content:center}
+#btnMute.muted{border-color:var(--bad); color:var(--bad)}
+#btnMute .wave{transition:.2s}
+#btnMute.muted .wave{opacity:0}
+#btnMute .slash{opacity:0; transition:.2s}
+#btnMute.muted .slash{opacity:1}
+
+/* ============ 布局 ============ */
+main{max-width:1460px; margin:0 auto; padding:calc(var(--header-h) + 22px) 20px 40px}
+section{scroll-margin-top:calc(var(--header-h) + 14px); margin-bottom:34px}
+.sec-head{display:flex; align-items:baseline; gap:12px; margin-bottom:14px; flex-wrap:wrap}
+.sec-head .no{font-family:ui-monospace,Consolas,monospace; color:var(--amber); font-size:.8rem; letter-spacing:.2em}
+.sec-head h2{font-size:1.28rem; letter-spacing:.02em}
+.sec-head p{color:var(--ink-mute); font-size:.82rem; width:100%}
+.card{background:linear-gradient(160deg,var(--bg1),var(--bg2) 130%); border:1px solid var(--line-soft);
+  border-radius:var(--r); box-shadow:var(--shadow); overflow:hidden}
+.card-h{display:flex; align-items:center; gap:8px; padding:11px 16px; border-bottom:1px solid var(--line-soft);
+  font-size:.86rem; font-weight:700; letter-spacing:.04em}
+.card-h .dot{width:8px; height:8px; border-radius:50%; background:var(--amber); box-shadow:0 0 10px var(--amber)}
+.card-h .tag{margin-left:auto; font-weight:400; font-size:.7rem; color:var(--ink-mute); letter-spacing:.08em}
+.card-b{padding:14px 16px}
+.sticky{position:sticky; top:calc(var(--header-h) + 14px)}
+
+#tune{display:grid; grid-template-columns:minmax(240px,340px) minmax(280px,380px) minmax(280px,1fr); gap:18px; align-items:start}
+
+/* ---- 实时预览舞台 ---- */
+#stageCard .stage-wrap{position:relative; background:#000; aspect-ratio:9/16; width:min(100%, calc((100vh - 335px) * 9 / 16)); margin-inline:auto; overflow:hidden}
+#stageCard .stage-wrap video{position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block}
+.overlay{position:absolute; inset:0; pointer-events:none; overflow:hidden}
+.ov-chip{position:absolute; top:2.2%; left:3%; font-size:.66rem; letter-spacing:.1em; color:var(--cyan);
+  background:rgba(10,10,16,.55); border:1px solid rgba(63,212,230,.4); padding:2px 8px; border-radius:999px; backdrop-filter:blur(4px)}
+.ov-time{position:absolute; top:2.2%; right:3%; font-family:ui-monospace,Consolas,monospace; font-size:.66rem; color:var(--amber-soft);
+  background:rgba(10,10,16,.55); border:1px solid rgba(255,197,61,.35); padding:2px 8px; border-radius:999px}
+.guide{position:absolute; border:1.5px dashed; border-radius:4px; transition:opacity .25s}
+.guide.safe{left:8%; right:8%; top:0; bottom:15%; border-color:rgba(255,197,61,.65)}
+.guide.face{left:25%; width:50%; top:0; height:60%; border-color:rgba(255,79,154,.6)}
+.guide span{position:absolute; font-size:.6rem; letter-spacing:.08em; padding:1px 6px; border-radius:4px; background:rgba(10,10,16,.6)}
+.guide.safe span{left:0; bottom:-1.4em; color:var(--amber-soft)}
+.guide.face span{left:0; top:2px; color:var(--magenta)}
+.guide.off{opacity:0}
+.sub-box{position:absolute; left:8%; right:8%; bottom:15%; display:flex; flex-direction:column; align-items:center; text-align:center}
+.sub-line{white-space:nowrap; font-weight:600; color:#fff; line-height:1.25; letter-spacing:.01em}
+.sub-line .hl{color:var(--hl)}
+.ov-badge{position:absolute; top:6%; right:8%; color:#fff; font-weight:600; line-height:1.25; white-space:nowrap;
+  transition:font-size .22s ease, opacity .22s ease; text-align:right}
+.gbtn{font-size:.66rem; letter-spacing:.06em; padding:3px 10px; border-radius:999px; border:1px solid var(--line);
+  background:var(--bg2); color:var(--ink-mute); transition:.15s}
+.gbtn.on{border-color:var(--cyan); color:var(--cyan); box-shadow:0 0 10px rgba(63,212,230,.25)}
+.gbtn:hover{border-color:var(--cyan); color:var(--cyan)}
+
+/* ---- 参数台 ---- */
+.ctrl-scroll{max-height:calc(100vh - var(--header-h) - 120px); overflow-y:auto; padding:12px 16px 16px}
+.grp{margin-bottom:14px; padding-bottom:12px; border-bottom:1px dashed var(--line-soft)}
+.grp:last-of-type{border-bottom:none; margin-bottom:8px}
+.grp-t{font-size:.7rem; letter-spacing:.18em; color:var(--ink-mute); margin-bottom:9px; display:flex; align-items:center; gap:7px}
+.grp-t::before{content:""; width:6px; height:6px; border-radius:2px; background:var(--indigo); box-shadow:0 0 8px var(--indigo)}
+.grp-t.amber::before{background:var(--amber); box-shadow:0 0 8px var(--amber)}
+.grp-t.mag::before{background:var(--magenta); box-shadow:0 0 8px var(--magenta)}
+.row{display:flex; align-items:center; gap:10px; margin-bottom:9px}
+.row:last-child{margin-bottom:0}
+.row label{flex:1; font-size:.8rem; color:var(--ink-dim); display:flex; align-items:center; gap:6px}
+.row .val{font-family:ui-monospace,Consolas,monospace; font-size:.74rem; color:var(--amber-soft); min-width:52px; text-align:right}
+input[type=range]{-webkit-appearance:none; appearance:none; flex:1.4; height:22px; background:transparent; cursor:pointer; min-width:0}
+input[type=range]::-webkit-slider-runnable-track{height:5px; border-radius:3px; background:linear-gradient(90deg,var(--amber-deep),var(--indigo))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:15px; height:15px; margin-top:-5px; border-radius:50%;
+  background:var(--amber); border:2px solid #221604; box-shadow:0 0 10px rgba(255,197,61,.6); transition:.15s}
+input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
+input[type=range]::-moz-range-track{height:5px; border-radius:3px; background:linear-gradient(90deg,var(--amber-deep),var(--indigo))}
+input[type=range]::-moz-range-thumb{width:13px; height:13px; border-radius:50%; background:var(--amber); border:2px solid #221604}
+input[type=color]{width:38px; height:26px; border:1px solid var(--line); border-radius:7px; background:var(--bg2); padding:2px; cursor:pointer}
+.sw{position:relative; width:38px; height:21px; flex:none; cursor:pointer}
+.sw input{position:absolute; opacity:0; inset:0; cursor:pointer; margin:0}
+.sw i{position:absolute; inset:0; border-radius:999px; background:var(--bg3); border:1px solid var(--line); transition:.2s}
+.sw i::after{content:""; position:absolute; top:2px; left:2px; width:15px; height:15px; border-radius:50%; background:var(--ink-mute); transition:.2s}
+.sw input:checked + i{background:linear-gradient(90deg,var(--amber-deep),var(--amber)); border-color:var(--amber-deep)}
+.sw input:checked + i::after{left:19px; background:#221604}
+.sw input:focus-visible + i{outline:2px solid var(--cyan); outline-offset:2px}
+.hint{font-size:.68rem; color:var(--ink-mute); line-height:1.5; margin-top:6px}
+.actions{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px}
+.actions .btn{justify-content:center; padding:8px 6px; font-size:.78rem}
+
+/* ---- 字幕段落 ---- */
+.seg-list{max-height:calc(100vh - var(--header-h) - 210px); overflow-y:auto; display:flex; flex-direction:column; gap:4px; padding-right:4px}
+.seg-row{display:grid; grid-template-columns:30px 92px 1fr auto; gap:8px; align-items:center; text-align:left;
+  background:var(--bg0); border:1px solid transparent; border-radius:9px; padding:6px 9px; color:var(--ink-dim);
+  font-size:.76rem; transition:.15s; width:100%}
+.seg-row:hover{border-color:var(--line); background:var(--bg2)}
+.seg-row.act{border-color:var(--amber-deep); background:linear-gradient(90deg,rgba(255,197,61,.14),rgba(255,197,61,.03)); color:var(--ink); box-shadow:0 0 12px rgba(255,197,61,.15)}
+.seg-row .i{font-family:ui-monospace,Consolas,monospace; color:var(--ink-mute); font-size:.68rem}
+.seg-row.act .i{color:var(--amber)}
+.seg-row .t{font-family:ui-monospace,Consolas,monospace; font-size:.66rem; color:var(--ink-mute)}
+.seg-row .x{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.seg-row .x .hl{color:var(--hl); font-weight:700}
+.seg-row .meta{display:flex; gap:4px}
+.pill{font-size:.6rem; padding:1px 6px; border-radius:999px; border:1px solid var(--line); color:var(--ink-mute); white-space:nowrap}
+.pill.hl-on{border-color:rgba(255,255,0,.45); color:var(--hl)}
+.pill.l2{border-color:rgba(139,123,255,.5); color:var(--indigo)}
+.pill.lbad{border-color:var(--bad); color:var(--bad)}
+
+/* ---- 烧录对照 ---- */
+.cmp-grid{display:grid; grid-template-columns:1fr 1fr minmax(240px,340px); gap:18px; align-items:start}
+.cmp-card .stage-wrap{position:relative; background:#000; aspect-ratio:9/16; width:min(100%, calc((100vh - 250px) * 9 / 16)); margin-inline:auto; overflow:hidden}
+.cmp-card video{position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block}
+.cmp-label{position:absolute; top:2.2%; left:3%; z-index:2; font-size:.7rem; font-weight:700; letter-spacing:.1em;
+  padding:3px 11px; border-radius:999px; backdrop-filter:blur(4px)}
+.cmp-label.off{background:rgba(10,10,16,.66); border:1px solid rgba(183,175,196,.55); color:var(--ink)}
+.cmp-label.on{background:rgba(24,16,2,.7); border:1px solid rgba(255,197,61,.7); color:var(--amber)}
+.transport{display:flex; align-items:center; gap:8px; padding:10px 12px; border-top:1px solid var(--line-soft); flex-wrap:wrap}
+.tbtn{width:34px; height:34px; border-radius:9px; border:1px solid var(--line); background:var(--bg2); color:var(--ink);
+  display:grid; place-items:center; transition:.15s}
+.tbtn:hover{border-color:var(--cyan); color:var(--cyan); box-shadow:0 0 12px rgba(63,212,230,.3)}
+.tbtn:active{transform:scale(.92)}
+.tbtn svg{width:15px; height:15px}
+.tbtn.play{background:linear-gradient(135deg,var(--cyan),#1fa8bb); border:none; color:#062a2e; width:40px; height:40px}
+.tbtn.play:hover{box-shadow:0 0 18px rgba(63,212,230,.55); color:#062a2e}
+.t-time{font-family:ui-monospace,Consolas,monospace; font-size:.78rem; color:var(--ink-dim); margin-left:2px}
+.t-time b{color:var(--cyan); font-weight:600}
+.speed{margin-left:auto; display:flex; align-items:center; gap:6px; font-size:.72rem; color:var(--ink-mute)}
+select{background:var(--bg2); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:5px 8px; font-size:.78rem; outline:none; font-family:inherit}
+select:focus{border-color:var(--cyan)}
+.timeline{position:relative; height:44px; margin:4px 12px 12px; background:var(--bg0); border:1px solid var(--line-soft);
+  border-radius:9px; cursor:pointer; touch-action:none; overflow:hidden}
+.timeline .seg{position:absolute; top:16px; height:14px; background:linear-gradient(180deg,rgba(255,197,61,.75),rgba(224,139,31,.55));
+  border-radius:3px; transition:filter .15s}
+.timeline .seg.act{background:linear-gradient(180deg,var(--amber-soft),var(--amber)); box-shadow:0 0 10px rgba(255,197,61,.7)}
+.timeline .chap{position:absolute; top:0; bottom:0; width:2px; background:var(--magenta); box-shadow:0 0 8px rgba(255,79,154,.8)}
+.timeline .chap i{position:absolute; top:1px; left:3px; font-style:normal; font-size:.58rem; color:var(--magenta); white-space:nowrap; letter-spacing:.04em}
+.timeline .head{position:absolute; top:0; bottom:0; width:2px; background:var(--cyan); box-shadow:0 0 10px var(--cyan); pointer-events:none}
+.timeline .head::after{content:""; position:absolute; top:-1px; left:-4px; border:5px solid transparent; border-top-color:var(--cyan)}
+.cmp-timeline{height:30px}
+.cmp-timeline .seg{top:10px; height:10px}
+.delta{font-family:ui-monospace,Consolas,monospace; font-size:.74rem; color:var(--ok)}
+.delta.warn{color:var(--warn)}
+
+/* ---- 交付文件 ---- */
+.files{display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:8px}
+.files a{display:flex; align-items:center; gap:8px; color:var(--ink-dim); text-decoration:none; font-size:.76rem;
+  background:var(--bg0); border:1px solid var(--line-soft); border-radius:9px; padding:7px 10px; transition:.15s; word-break:break-all}
+.files a:hover{border-color:var(--cyan); color:var(--cyan)}
+.files a svg{width:13px; height:13px; flex:none; stroke:var(--amber)}
+
+footer{border-top:1px solid var(--line-soft); padding:18px 20px 26px; text-align:center; color:var(--ink-mute); font-size:.72rem; letter-spacing:.06em}
+footer b{color:var(--amber-deep)}
+
+#toast{position:fixed; left:50%; bottom:26px; transform:translate(-50%,20px); z-index:99; opacity:0; pointer-events:none;
+  background:linear-gradient(90deg,var(--bg2),var(--bg3)); border:1px solid var(--amber-deep); color:var(--ink);
+  padding:9px 20px; border-radius:999px; font-size:.82rem; box-shadow:0 8px 30px rgba(0,0,0,.5); transition:.3s}
+#toast.show{opacity:1; transform:translate(-50%,0)}
+#toast b{color:var(--amber)}
+
+.rise{opacity:0; transform:translateY(22px); transition:opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1)}
+.rise.in{opacity:1; transform:none}
+@media (prefers-reduced-motion:reduce){
+  .aurora i{animation:none}
+  .rise{opacity:1; transform:none; transition:none}
+  html{scroll-behavior:auto}
+}
+@media (max-width:1180px){
+  #tune{grid-template-columns:minmax(240px,320px) minmax(280px,1fr)}
+  #segCard{grid-column:1 / -1}
+  .cmp-grid{grid-template-columns:1fr 1fr}
+  .cmp-grid .card:last-child{grid-column:1 / -1}
+}
+@media (max-width:820px){
+  nav{display:none}
+  #tune{grid-template-columns:1fr}
+  #stageCard .stage-wrap{width:100%}
+  .sticky{position:static}
+  .ctrl-scroll{max-height:none}
+  .seg-list{max-height:420px}
+  .cmp-grid{grid-template-columns:1fr}
+  .cmp-grid .card:last-child{grid-column:auto}
+  .brand small{display:none}
+  #btnMute{min-width:0}
+  #btnMute .txt{display:none}
+  .seg-row{grid-template-columns:26px 84px 1fr auto}
+}
+</style>
+</head>
+<body>
+<div class="aurora" aria-hidden="true"><i class="a1"></i><i class="a2"></i><i class="a3"></i></div>
+<div class="grain" aria-hidden="true"></div>
+
+<header>
+  <div class="brand">
+    <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.6 7.8 20 19M8.6 16.2 20 5"/></svg></span>
+    <div><h1>口播动效工作台</h1><small>D 模块 · 基础动效 · PRD v1.0</small></div>
+  </div>
+  <nav id="nav">
+    <a href="#tune" class="on">调参</a><a href="#compare">烧录对比</a><a href="#files">交付文件</a>
+  </nav>
+  <div class="head-right">
+    <button class="btn" id="btnMute" title="一键静音 / 恢复两版样片声音">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M11 5 6 9H3v6h3l5 4z" fill="currentColor" stroke="none"/>
+        <path class="wave" d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12"/>
+        <path class="slash" d="M16 9l6 6M22 9l-6 6"/>
+      </svg><span class="txt">声音开</span>
+    </button>
+  </div>
+</header>
+
+<main>
+<!-- ================= 调参 ================= -->
+<section id="tune">
+  <div class="card sticky rise" id="stageCard">
+    <div class="card-h"><span class="dot" style="background:var(--cyan);box-shadow:0 0 10px var(--cyan)"></span>实时预览 · 参数即时生效<span class="tag">720×1280 · 46.27s</span></div>
+    <div class="stage-wrap" id="stageWrap">
+      <video id="vMain" src="社团项目/微信视频2026-11-21_213120_116_cut.mp4" poster="社团项目/d_output/poster_clean.jpg" preload="metadata" playsinline></video>
+      <div class="overlay" id="overlay">
+        <div class="guide face off" id="gFace"><span>人脸保守区 50%×60%</span></div>
+        <div class="guide safe" id="gSafe"><span>安全区 · 左右8% · 底15%</span></div>
+        <div class="ov-badge" id="ovBadge"></div>
+        <div class="sub-box" id="ovSub"></div>
+        <span class="ov-chip">LIVE · 参数即时生效</span>
+        <span class="ov-time" id="ovTime">00:00.00</span>
+      </div>
+    </div>
+    <div class="transport">
+      <button class="tbtn" id="btnMainBack" title="后退一帧"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 20 9 12l10-8z"/><path d="M5 4v16"/></svg></button>
+      <button class="tbtn play" id="btnMainPlay" title="播放 / 暂停预览"><svg id="icoMainPlay" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg><svg id="icoMainPause" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button>
+      <button class="tbtn" id="btnMainFwd" title="前进一帧"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 4 10 8-10 8z"/><path d="M19 4v16"/></svg></button>
+      <span class="t-time"><b id="tCur">00:00.00</b> / 00:46.27</span>
+      <span class="speed">倍速
+        <select id="selSpeedMain" title="预览倍速">
+          <option value="0.5">0.5×</option><option value="0.75">0.75×</option>
+          <option value="1" selected>1×</option><option value="1.25">1.25×</option>
+          <option value="1.5">1.5×</option><option value="2">2×</option>
+        </select>
+      </span>
+    </div>
+    <div class="timeline cmp-timeline" id="tlMain" title="点击 / 拖动跳转预览"></div>
+    <div class="transport" style="border-top:none; padding-top:2px">
+      <button class="gbtn on" id="btnGuideSafe">安全区辅助线</button>
+      <button class="gbtn" id="btnGuideFace">人脸区辅助线</button>
+    </div>
+  </div>
+
+  <div class="card sticky rise" id="ctrlCard" style="transition-delay:.08s">
+    <div class="card-h"><span class="dot" style="background:var(--indigo);box-shadow:0 0 10px var(--indigo)"></span>参数台 · 即时生效<span class="tag">10 项控件</span></div>
+    <div class="ctrl-scroll">
+      <div class="grp">
+        <div class="grp-t amber">动效 EFFECTS</div>
+        <div class="row"><label for="swEffects">动效总开关（关 = 无动效版）</label><span class="sw"><input type="checkbox" id="swEffects" checked><i></i></span></div>
+        <div class="row"><label for="rgFade">淡入时长</label><input type="range" id="rgFade" min="80" max="150" step="1" value="120"><span class="val" id="vFade">120ms</span></div>
+        <div class="row"><label for="selRule">高亮选词规则</label>
+          <select id="selRule"><option value="glossary" selected>术语表优先</option><option value="number">仅数字</option><option value="off">关闭高亮</option></select></div>
+        <div class="row"><label for="colHl">高亮颜色</label><input type="color" id="colHl" value="#ffff00"><span class="val" id="vHl">#FFFF00</span></div>
+      </div>
+      <div class="grp">
+        <div class="grp-t">字幕排版 TYPE</div>
+        <div class="row"><label for="rgFs">字号（PlayRes 1080×1920）</label><input type="range" id="rgFs" min="36" max="64" step="1" value="48"><span class="val" id="vFs">48</span></div>
+        <div class="row"><label for="rgChars">每行最多字数</label><input type="range" id="rgChars" min="12" max="16" step="1" value="16"><span class="val" id="vChars">16</span></div>
+        <div class="row"><label for="rgMarginV">底部安全区 / 基线</label><input type="range" id="rgMarginV" min="10" max="20" step="1" value="15"><span class="val" id="vMarginV">15%</span></div>
+        <div class="row"><label for="rgSafeLR">左右安全区</label><input type="range" id="rgSafeLR" min="4" max="12" step="1" value="8"><span class="val" id="vSafeLR">8%</span></div>
+        <div class="row"><label for="rgOutline">描边粗细</label><input type="range" id="rgOutline" min="0" max="4" step="0.5" value="2"><span class="val" id="vOutline">2.0</span></div>
+      </div>
+      <div class="grp">
+        <div class="grp-t mag">章节角标 BADGE</div>
+        <div class="row"><label for="swBadge">显示章节角标</label><span class="sw"><input type="checkbox" id="swBadge" checked><i></i></span></div>
+        <div class="row"><label for="swShrink">说话时缩小 + 半透明</label><span class="sw"><input type="checkbox" id="swShrink" checked><i></i></span></div>
+        <div class="row"><label for="rgBadgeFs">角标字号比例</label><input type="range" id="rgBadgeFs" min="40" max="70" step="1" value="55"><span class="val" id="vBadgeFs">55%</span></div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="btnReset" title="恢复 PRD 默认参数">⟲ 重置参数</button>
+        <button class="btn" id="btnRandom" title="随机一组合法参数">⚄ 随机参数</button>
+        <button class="btn primary" id="btnAss" title="导出与当前参数一致的 ASS">导出 ASS</button>
+        <button class="btn" id="btnJson" title="导出模板 JSON，可直接给 effects.py --template">导出参数 JSON</button>
+      </div>
+      <div class="hint">参数改动即时反映到左侧预览叠加与右侧段落折行、高亮，并决定「导出 ASS / JSON」内容；烧录验证请对照下方两版样片。</div>
+    </div>
+  </div>
+
+  <div class="card rise" id="segCard" style="transition-delay:.14s">
+    <div class="card-h"><span class="dot" style="background:var(--cyan);box-shadow:0 0 10px var(--cyan)"></span>字幕段落 · 24 条<span class="tag">点击定位到对照样片</span></div>
+    <div class="card-b"><div class="seg-list" id="segList"></div></div>
+  </div>
+</section>
+
+<!-- ================= 烧录对比 ================= -->
+<section id="compare">
+  <div class="sec-head rise"><span class="no">02</span><h2>烧录样片 · 同时间轴对照</h2>
+    <p>ffmpeg + libass 单次烧录（-c:a copy，时长不变）。两版共用一条时间轴，声音跟随顶部静音开关；播放中自动纠偏（&gt;80ms 即对齐）。</p></div>
+  <div class="cmp-grid">
+    <div class="card cmp-card rise">
+      <div class="stage-wrap">
+        <span class="cmp-label off">无动效 · 纯字幕</span>
+        <video id="vOff" src="社团项目/d_output/微信视频2026-11-21_213120_116_cut_noeffects.mp4" poster="社团项目/d_output/poster_noeffects.jpg" preload="metadata" playsinline></video>
+      </div>
+    </div>
+    <div class="card cmp-card rise" style="transition-delay:.08s">
+      <div class="stage-wrap">
+        <span class="cmp-label on">轻动效 · 淡入+高亮+角标</span>
+        <video id="vLight" src="社团项目/d_output/微信视频2026-11-21_213120_116_cut_light.mp4" poster="社团项目/d_output/poster_light.jpg" preload="metadata" playsinline></video>
+      </div>
+    </div>
+    <div class="card rise" style="transition-delay:.14s">
+      <div class="card-h"><span class="dot" style="background:var(--cyan);box-shadow:0 0 10px var(--cyan)"></span>对照走带<span class="tag">同步播放</span></div>
+      <div class="card-b">
+        <div class="transport" style="padding:0 0 8px; border-top:none">
+          <button class="tbtn" id="btnBack" title="后退一帧 (←)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 20 9 12l10-8z"/><path d="M5 4v16"/></svg></button>
+          <button class="tbtn play" id="btnCmpPlay" title="同步播放 / 暂停两版 (空格)"><svg id="icoCmpPlay" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg><svg id="icoCmpPause" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button>
+          <button class="tbtn" id="btnFwd" title="前进一帧 (→)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 4 10 8-10 8z"/><path d="M19 4v16"/></svg></button>
+          <button class="tbtn" id="btnCmpRestart" title="回到开头"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+          <span class="t-time"><b id="cmpCur">00:00.00</b> / 00:46.27</span>
+          <span class="delta" id="cmpDelta" title="两版播放位置差">Δ 0ms</span>
+          <span class="speed">倍速
+            <select id="selSpeed" title="播放倍速（两版同步）">
+              <option value="0.5">0.5×</option><option value="0.75">0.75×</option>
+              <option value="1" selected>1×</option><option value="1.25">1.25×</option>
+              <option value="1.5">1.5×</option><option value="2">2×</option>
+            </select>
+          </span>
+        </div>
+        <div class="timeline cmp-timeline" id="tlCmp" title="点击 / 拖动同步跳转" style="margin:0"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 交付文件 ================= -->
+<section id="files">
+  <div class="sec-head rise"><span class="no">03</span><h2>交付文件</h2>
+    <p>真片试做产物（2026-11-24，干净源 _cut.mp4 · 逐帧自检 挡脸/贴边/超两行 = 0/0/0 · 122 帧 · 淡入 24×120ms · 高亮 2/24）。</p></div>
+  <div class="card rise">
+    <div class="card-h"><span class="dot" style="background:var(--indigo);box-shadow:0 0 10px var(--indigo)"></span>点击打开</div>
+    <div class="card-b files">
+      <a href="社团项目/d_output/微信视频2026-11-21_213120_116_cut_light.mp4"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="m5 4 14 8-14 8z"/></svg>轻动效成片 _cut_light.mp4</a>
+      <a href="社团项目/d_output/微信视频2026-11-21_213120_116_cut_noeffects.mp4"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="m5 4 14 8-14 8z"/></svg>无动效成片 _cut_noeffects.mp4</a>
+      <a href="社团项目/d_output/微信视频2026-11-21_213120_116_cut_light.ass"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6"/></svg>轻动效字幕 _cut_light.ass</a>
+      <a href="社团项目/d_output/微信视频2026-11-21_213120_116_cut_noeffects.ass"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6"/></svg>无动效字幕 _cut_noeffects.ass</a>
+      <a href="社团项目/d_output/check_report.json"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M6 2h9l5 5v15H6z"/><path d="M9 13h6M9 17h6"/></svg>逐帧自检报告 check_report.json</a>
+      <a href="社团项目/d_output/input/segments.json"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M6 2h9l5 5v15H6z"/><path d="M9 13h6M9 17h6"/></svg>输入字幕 segments.json（24 条）</a>
+      <a href="社团项目/微信视频2026-11-21_213120_116_cut.mp4"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="m5 4 14 8-14 8z"/></svg>干净源片 _cut.mp4（未烧字幕）</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>技术路线 <b>pysubs2 → ASS 标签 → ffmpeg libass 单次烧录</b> · 宿主 MIT · 规格以 PRD.md 为准 · D 模块交付</footer>
+<div id="toast" role="status"></div>
+<noscript><p style="padding:80px 20px;text-align:center">本工作台需要启用 JavaScript。</p></noscript>
+
+<script>
+"use strict";
+/* ================= 数据（与 d_output/input/*.json 一致） ================= */
+const SEGMENTS = [
+ {index:1,start:0.540,end:2.700,text:"大家好，今天我想跟大家聊一聊"},
+ {index:2,start:2.720,end:4.060,text:"视频剪辑这件事。"},
+ {index:3,start:4.080,end:5.960,text:"其实很多人觉得剪辑很难，"},
+ {index:4,start:5.980,end:7.870,text:"但其实也没那么难，"},
+ {index:5,start:8.060,end:10.720,text:"我们只需要把那些多余的停顿、"},
+ {index:6,start:10.740,end:13.210,text:"口误和重复的部分剪掉就可以了。"},
+ {index:7,start:13.440,end:15.300,text:"比如说，像ASR"},
+ {index:8,start:15.320,end:17.340,text:"也就是自动语音识别，"},
+ {index:9,start:17.360,end:19.790,text:"它可以把你说的话转成文字，"},
+ {index:10,start:20.060,end:22.900,text:"然后大语言模型也就是LLM"},
+ {index:11,start:22.920,end:24.580,text:"会帮你判断哪句话该留、"},
+ {index:12,start:24.580,end:25.850,text:"哪句话该删。"},
+ {index:13,start:25.860,end:27.340,text:"这有个关键点，"},
+ {index:14,start:27.350,end:28.990,text:"就是时间戳的对齐；"},
+ {index:15,start:29.000,end:30.450,text:"如果时间戳不准，"},
+ {index:16,start:30.500,end:32.780,text:"剪出来的视频就会跳帧，"},
+ {index:17,start:32.800,end:33.880,text:"看起来特别别扭，"},
+ {index:18,start:33.900,end:35.660,text:"所以我们一定要确保"},
+ {index:19,start:35.680,end:37.460,text:"转录的准确性。"},
+ {index:20,start:37.480,end:39.720,text:"另外，像口播、气口、跳切"},
+ {index:21,start:39.740,end:42.860,text:"这些术语，模型也得能正确识别，"},
+ {index:22,start:42.880,end:43.640,text:"不能瞎切。"},
+ {index:23,start:43.660,end:45.140,text:"好，以上就是今天的内容，"},
+ {index:24,start:45.160,end:46.055,text:"谢谢大家。"}
+];
+const CHAPTERS = [
+ {start:0.0,label:"开场"},
+ {start:13.44,label:"第2节 · ASR 与 LLM"},
+ {start:25.86,label:"第3节 · 时间戳对齐"},
+ {start:37.48,label:"第4节 · 术语与收尾"}
+];
+const GLOSSARY = ["FunASR","VideoCut","FFmpeg","OpenAI","Claude","GPT","API","SRT","ASS","MP4","H.264","AAC","Whisper","ASR","LLM"];
+const W = 1080, H = 1920, DUR = 46.266667, FPS = 30;
+const DEFAULTS = {effectsOn:true, fadeMs:120, rule:"glossary", hl:"#ffff00", fs:48, chars:16,
+                  marginV:15, safeLR:8, outline:2, badgeOn:true, badgeShrink:true, badgeFsPct:55, speed:1};
+let S = {...DEFAULTS};
+
+/* ================= 与 effects.py 同构的纯函数 ================= */
+const wrapText = (text, maxChars) => {
+  const lines = []; let cur = "";
+  for (const ch of text) { cur += ch; if ([...cur].length >= maxChars) { lines.push(cur); cur = ""; } }
+  if (cur) lines.push(cur);
+  return lines.length ? lines : [""];
+};
+const NUM_RE = /\d+(?:\.\d+)?%?/;
+function pickHighlight(text, rule) {
+  if (rule === "off") return null;
+  if (rule !== "number") {
+    let best = null;
+    for (const term of GLOSSARY) {
+      const pos = text.indexOf(term);
+      if (pos >= 0 && (best === null || pos < best.pos || (pos === best.pos && term.length > best.word.length)))
+        best = {pos, word: term};
+    }
+    if (best) return best.word;
+  }
+  const m = text.match(NUM_RE);
+  return m ? m[0] : null;
+}
+const hexToAssStyle = hex => {
+  const r = hex.slice(1,3), g = hex.slice(3,5), b = hex.slice(5,7);
+  return ("&H00" + b + g + r).toUpperCase();
+};
+const assInline = hex => ("&H" + hex.slice(5,7) + hex.slice(3,5) + hex.slice(1,3) + "&").toUpperCase();
+const assTime = s => {
+  const cs = Math.round(s*100);
+  const h = Math.floor(cs/360000), m = Math.floor(cs%360000/6000), sec = Math.floor(cs%6000/100), c = cs%100;
+  return `${h}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}.${String(c).padStart(2,"0")}`;
+};
+const fmt = s => {
+  const m = Math.floor(s/60), sec = Math.floor(s%60), cs = Math.floor((s*100)%100);
+  return `${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}.${String(cs).padStart(2,"0")}`;
+};
+const segAt = t => SEGMENTS.find(s => t >= s.start && t < s.end) || null;
+const chapterAt = t => {
+  let cur = null;
+  for (let i = 0; i < CHAPTERS.length; i++) if (t >= CHAPTERS[i].start) cur = i;
+  if (cur === null) return null;
+  const end = cur+1 < CHAPTERS.length ? CHAPTERS[cur+1].start : SEGMENTS[SEGMENTS.length-1].end;
+  return t < end ? cur : null;
+};
+
+/* ================= DOM ================= */
+const $ = id => document.getElementById(id);
+const vMain = $("vMain"), vOff = $("vOff"), vLight = $("vLight");
+const ovSub = $("ovSub"), ovBadge = $("ovBadge"), stageWrap = $("stageWrap");
+let muted = false, activeSegIdx = -1, lastPlayingShown = false;
+let scale = 0.3, subKey = "", badgeKey = "", lastMainPlaying = false, showSafe = true, showFace = false;
+
+/* ---- 预览叠加渲染（与 ASS 同一套参数） ---- */
+function outlineShadow(px) {
+  if (px <= 0) return "none";
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1],[.7,.7],[-.7,.7],[.7,-.7],[-.7,-.7]];
+  return dirs.map(([x,y]) => `${(x*px).toFixed(1)}px ${(y*px).toFixed(1)}px 0 #000`).join(",");
+}
+function renderSubtitle(seg, t) {
+  const key = seg ? seg.index + "|" + S.fs + "|" + S.chars + "|" + S.hl + "|" + S.rule + "|" + S.effectsOn + "|" + S.outline + "|" + S.marginV + "|" + S.safeLR : "none";
+  if (key !== subKey) {
+    subKey = key;
+    ovSub.innerHTML = "";
+    if (seg) {
+      const lines = wrapText(seg.text, S.chars);
+      const hl = S.effectsOn ? pickHighlight(seg.text, S.rule) : null;
+      const hp = hl ? seg.text.indexOf(hl) : -1;
+      let idx = 0;
+      for (const line of lines) {
+        const a0 = idx, a1 = idx + [...line].length; idx = a1;
+        const div = document.createElement("div");
+        div.className = "sub-line";
+        if (hl && hp < a1 && hp + hl.length > a0) {
+          const a = Math.max(hp, a0) - a0, b = Math.min(hp + hl.length, a1) - a0;
+          const chars = [...line];
+          div.append(chars.slice(0,a).join(""));
+          const sp = document.createElement("span"); sp.className = "hl"; sp.textContent = chars.slice(a,b).join("");
+          div.append(sp, chars.slice(b).join(""));
+        } else div.textContent = line;
+        ovSub.appendChild(div);
+      }
+    }
+    applySubStyle();
+  }
+  if (seg) {
+    const op = S.effectsOn ? Math.min(1, Math.max(0, (t - seg.start) / (S.fadeMs/1000))) : 1;
+    ovSub.style.opacity = op.toFixed(3);
+  }
+}
+function applySubStyle() {
+  const fsPx = S.fs * scale;
+  ovSub.style.bottom = S.marginV + "%";
+  ovSub.style.left = S.safeLR + "%";
+  ovSub.style.right = S.safeLR + "%";
+  for (const div of ovSub.children) {
+    div.style.fontSize = fsPx.toFixed(2) + "px";
+    div.style.textShadow = outlineShadow(S.outline * scale);
+    const hl = div.querySelector(".hl"); if (hl) hl.style.color = S.hl;
+  }
+}
+function renderBadge(t) {
+  const ci = S.badgeOn && S.effectsOn ? chapterAt(t) : null;
+  const seg = segAt(t);
+  const speaking = !!seg && S.badgeShrink;
+  const key = ci + "|" + speaking + "|" + S.fs + "|" + S.badgeFsPct + "|" + S.outline + "|" + S.safeLR;
+  if (key !== badgeKey) {
+    badgeKey = key;
+    if (ci === null) { ovBadge.style.display = "none"; }
+    else {
+      ovBadge.style.display = "block";
+      ovBadge.textContent = CHAPTERS[ci].label;
+      const baseFs = Math.trunc(S.fs * S.badgeFsPct / 100);
+      const fsUsed = speaking ? Math.trunc(baseFs * 0.6) : baseFs;
+      ovBadge.style.fontSize = (fsUsed * scale).toFixed(2) + "px";
+      ovBadge.style.opacity = speaking ? 0.5 : 1;
+      ovBadge.style.top = "8.5%";
+      ovBadge.style.right = S.safeLR + "%";
+      ovBadge.style.textShadow = outlineShadow(S.outline * scale);
+    }
+  }
+}
+function applyGuides() {
+  const gS = $("gSafe"), gF = $("gFace");
+  gS.classList.toggle("off", !showSafe);
+  gF.classList.toggle("off", !showFace);
+  gS.style.left = S.safeLR + "%"; gS.style.right = S.safeLR + "%"; gS.style.bottom = S.marginV + "%";
+  gS.querySelector("span").textContent = `安全区 · 左右${S.safeLR}% · 底${S.marginV}%`;
+}
+function rescale() {
+  scale = stageWrap.clientHeight / H;
+  subKey = ""; badgeKey = "";
+  applySubStyle(); applyGuides();
+}
+
+/* ---- 段落列表 ---- */
+function buildSegList() {
+  const list = $("segList");
+  list.innerHTML = "";
+  for (const seg of SEGMENTS) {
+    const b = document.createElement("button");
+    b.className = "seg-row"; b.dataset.idx = seg.index;
+    b.title = `定位对照样片到 ${fmt(seg.start)}`;
+    b.innerHTML = `<span class="i">${String(seg.index).padStart(2,"0")}</span><span class="t">${fmt(seg.start)}–${fmt(seg.end)}</span><span class="x"></span><span class="meta"></span>`;
+    b.addEventListener("click", () => {
+      vMain.pause();
+      vOff.currentTime = seg.start + 0.001; vLight.currentTime = seg.start + 0.001;
+      if (vOff.paused && vLight.paused) Promise.all([vOff.play(), vLight.play()]).catch(()=>toast("浏览器阻止了播放，请再点一次"));
+    });
+    list.appendChild(b);
+  }
+  refreshSegList();
+}
+function refreshSegList() {
+  document.documentElement.style.setProperty("--hl", S.hl);
+  for (const row of $("segList").children) {
+    const seg = SEGMENTS[+row.dataset.idx - 1];
+    const hl = S.effectsOn ? pickHighlight(seg.text, S.rule) : null;
+    const x = row.querySelector(".x");
+    x.innerHTML = "";
+    if (hl) {
+      const p = seg.text.indexOf(hl);
+      x.append(seg.text.slice(0,p));
+      const sp = document.createElement("span"); sp.className = "hl"; sp.textContent = hl; sp.style.color = S.hl;
+      x.append(sp, seg.text.slice(p+hl.length));
+    } else x.textContent = seg.text;
+    const lines = wrapText(seg.text, S.chars).length;
+    row.querySelector(".meta").innerHTML =
+      (hl ? `<span class="pill hl-on" style="color:${S.hl};border-color:${S.hl}66">${hl}</span>` : "") +
+      `<span class="pill ${lines>2?"lbad":lines===2?"l2":""}">${lines}行</span>`;
+  }
+  applyGuides();
+}
+function markActiveSeg(idx) {
+  if (idx === activeSegIdx) return;
+  const list = $("segList");
+  if (activeSegIdx > 0) list.children[activeSegIdx-1]?.classList.remove("act");
+  activeSegIdx = idx;
+  if (idx > 0) {
+    const row = list.children[idx-1];
+    row.classList.add("act");
+    const target = row.offsetTop - list.clientHeight/2 + row.clientHeight/2;
+    list.scrollTo({top: Math.max(0,target), behavior:"smooth"});
+  }
+}
+
+/* ---- 时间轴 ---- */
+function buildTimeline(el, withChaps, onSeek) {
+  el.innerHTML = "";
+  for (const seg of SEGMENTS) {
+    const d = document.createElement("div");
+    d.className = "seg"; d.dataset.idx = seg.index;
+    d.style.left = (seg.start/DUR*100) + "%";
+    d.style.width = Math.max(0.4,(seg.end-seg.start)/DUR*100) + "%";
+    d.title = `#${seg.index} ${seg.text}`;
+    el.appendChild(d);
+  }
+  if (withChaps) for (const ch of CHAPTERS) {
+    const c = document.createElement("div");
+    c.className = "chap"; c.style.left = (ch.start/DUR*100) + "%";
+    c.innerHTML = `<i>${ch.label.split(" · ")[0]}</i>`;
+    el.appendChild(c);
+  }
+  const h = document.createElement("div"); h.className = "head"; h.style.left = "0%";
+  el.appendChild(h);
+  const seek = ev => {
+    const r = el.getBoundingClientRect();
+    return Math.min(Math.max((ev.clientX - r.left)/r.width, 0), 1) * DUR;
+  };
+  el.addEventListener("pointerdown", ev => {
+    try { el.setPointerCapture(ev.pointerId); } catch (_) {}
+    onSeek(seek(ev));
+    const move = e => onSeek(seek(e));
+    const up = () => { el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+  });
+  return el.querySelector(".head");
+}
+const setBoth = t => { vOff.currentTime = t; vLight.currentTime = t; };
+const headCmp = buildTimeline($("tlCmp"), true, setBoth);
+const cmpSegEls = [...$("tlCmp").querySelectorAll(".seg")];
+const headMain = buildTimeline($("tlMain"), true, t => { pauseMain(); vMain.currentTime = t; });
+const mainSegEls = [...$("tlMain").querySelectorAll(".seg")];
+
+/* ---- 播放控制（状态从真实 paused 派生，不用标志位） ---- */
+const cmpIsPlaying = () => !vOff.paused || !vLight.paused;
+function pauseCompare() { vOff.pause(); vLight.pause(); }
+function pauseMain() { if (!vMain.paused) vMain.pause(); }
+function stepCmp(dt) {
+  pauseCompare();
+  const t = Math.min(Math.max(vOff.currentTime + dt, 0), DUR - 0.05);
+  vOff.currentTime = t; vLight.currentTime = t;
+}
+$("btnCmpPlay").addEventListener("click", () => {
+  if (cmpIsPlaying()) pauseCompare();
+  else {
+    pauseMain();
+    if (vOff.ended || vOff.currentTime >= DUR-0.1) { vOff.currentTime = 0; vLight.currentTime = 0; }
+    vLight.currentTime = vOff.currentTime;
+    Promise.all([vOff.play(), vLight.play()]).catch(()=>toast("浏览器阻止了播放，请再点一次"));
+  }
+});
+$("btnCmpRestart").addEventListener("click", () => { vOff.currentTime = 0; vLight.currentTime = 0; });
+$("btnBack").addEventListener("click", () => stepCmp(-1/FPS));
+$("btnFwd").addEventListener("click", () => stepCmp(1/FPS));
+vOff.addEventListener("ended", () => vLight.pause());
+vLight.addEventListener("ended", () => vOff.pause());
+
+/* ---- 预览台走带 ---- */
+function stepMain(dt) {
+  pauseMain();
+  vMain.currentTime = Math.min(Math.max(vMain.currentTime + dt, 0), DUR - 0.05);
+}
+$("btnMainPlay").addEventListener("click", () => {
+  if (!vMain.paused) vMain.pause();
+  else {
+    pauseCompare();
+    if (vMain.ended || vMain.currentTime >= DUR-0.1) vMain.currentTime = 0;
+    vMain.play().catch(()=>toast("浏览器阻止了播放，请再点一次"));
+  }
+});
+$("btnMainBack").addEventListener("click", () => stepMain(-1/FPS));
+$("btnMainFwd").addEventListener("click", () => stepMain(1/FPS));
+$("selSpeedMain").addEventListener("change", e => {
+  vMain.playbackRate = parseFloat(e.target.value);
+  toast(`预览倍速 <b>${e.target.value}×</b>`);
+});
+$("btnGuideSafe").addEventListener("click", () => { showSafe = !showSafe; $("btnGuideSafe").classList.toggle("on", showSafe); applyGuides(); });
+$("btnGuideFace").addEventListener("click", () => { showFace = !showFace; $("btnGuideFace").classList.toggle("on", showFace); applyGuides(); });
+
+/* ---- 静音（一键全部） ---- */
+$("btnMute").addEventListener("click", () => {
+  muted = !muted;
+  for (const v of [vMain, vOff, vLight]) v.muted = muted;
+  $("btnMute").classList.toggle("muted", muted);
+  $("btnMute").querySelector(".txt").textContent = muted ? "已静音" : "声音开";
+  toast(muted ? "已静音两版样片" : "声音已恢复");
+});
+
+/* ---- 参数绑定 ---- */
+function bindRange(id, key, valId, fmtFn) {
+  const el = $(id);
+  el.addEventListener("input", () => { S[key] = parseFloat(el.value); $(valId).textContent = fmtFn(S[key]); refreshSegList(); });
+}
+bindRange("rgFade","fadeMs","vFade", v=>v+"ms");
+bindRange("rgFs","fs","vFs", v=>v);
+bindRange("rgChars","chars","vChars", v=>v);
+bindRange("rgMarginV","marginV","vMarginV", v=>v+"%");
+bindRange("rgSafeLR","safeLR","vSafeLR", v=>v+"%");
+bindRange("rgOutline","outline","vOutline", v=>v.toFixed(1));
+bindRange("rgBadgeFs","badgeFsPct","vBadgeFs", v=>v+"%");
+function bindSwitch(id, key) {
+  $(id).addEventListener("change", e => { S[key] = e.target.checked; refreshSegList(); });
+}
+bindSwitch("swEffects","effectsOn"); bindSwitch("swBadge","badgeOn"); bindSwitch("swShrink","badgeShrink");
+$("selRule").addEventListener("change", e => { S.rule = e.target.value; refreshSegList(); });
+$("colHl").addEventListener("input", e => { S.hl = e.target.value; $("vHl").textContent = S.hl.toUpperCase(); refreshSegList(); });
+$("selSpeed").addEventListener("change", e => {
+  S.speed = parseFloat(e.target.value);
+  vOff.playbackRate = S.speed; vLight.playbackRate = S.speed;
+  toast(`倍速 <b>${S.speed}×</b>`);
+});
+function syncControls() {
+  $("swEffects").checked = S.effectsOn; $("swBadge").checked = S.badgeOn; $("swShrink").checked = S.badgeShrink;
+  $("rgFade").value = S.fadeMs; $("vFade").textContent = S.fadeMs+"ms";
+  $("rgFs").value = S.fs; $("vFs").textContent = S.fs;
+  $("rgChars").value = S.chars; $("vChars").textContent = S.chars;
+  $("rgMarginV").value = S.marginV; $("vMarginV").textContent = S.marginV+"%";
+  $("rgSafeLR").value = S.safeLR; $("vSafeLR").textContent = S.safeLR+"%";
+  $("rgOutline").value = S.outline; $("vOutline").textContent = S.outline.toFixed(1);
+  $("rgBadgeFs").value = S.badgeFsPct; $("vBadgeFs").textContent = S.badgeFsPct+"%";
+  $("selRule").value = S.rule; $("colHl").value = S.hl; $("vHl").textContent = S.hl.toUpperCase();
+  $("selSpeed").value = String(S.speed);
+}
+$("btnReset").addEventListener("click", () => {
+  S = {...DEFAULTS}; syncControls(); refreshSegList();
+  vOff.playbackRate = S.speed; vLight.playbackRate = S.speed;
+  toast("已恢复 <b>PRD 默认参数</b>");
+});
+$("btnRandom").addEventListener("click", () => {
+  const ri = (a,b) => a + Math.floor(Math.random()*(b-a+1));
+  const palette = ["#ffff00","#ff4f9a","#3fd4e6","#3ddc84","#ff8a3d","#8b7bff"];
+  S = {...S, fadeMs:ri(80,150), fs:ri(38,60), chars:ri(12,16), marginV:ri(12,18), safeLR:ri(5,10),
+       outline:[1,1.5,2,2.5,3][ri(0,4)], badgeFsPct:ri(45,65),
+       hl:palette[ri(0,palette.length-1)], badgeShrink:Math.random()<0.8, badgeOn:Math.random()<0.9};
+  syncControls(); refreshSegList(); toast("已随机一组参数");
+});
+
+/* ---- ASS / JSON 导出（镜像 build_ass） ---- */
+function buildAss() {
+  const fs = S.fs, marginLR = Math.trunc(W*S.safeLR/100), marginV = Math.trunc(H*S.marginV/100);
+  const hlInline = assInline(S.hl), prInline = "&HFFFFFF&";
+  const L = [];
+  L.push("[Script Info]","Title: videocut D-module effects (workbench export)","ScriptType: v4.00+",
+         `PlayResX: ${W}`,`PlayResY: ${H}`,"WrapStyle: 2","ScaledBorderAndShadow: yes","","");
+  L.push("[V4+ Styles]",
+    "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+    `Style: Default,Microsoft YaHei,${fs},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,${S.outline},0,2,${marginLR},${marginLR},${marginV},1`);
+  const badgeFs = Math.trunc(fs*S.badgeFsPct/100);
+  const badgeTop = Math.trunc(H*0.06);
+  if (S.effectsOn && S.badgeOn)
+    L.push(`Style: Badge,Microsoft YaHei,${badgeFs},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,${S.outline},0,9,${marginLR},${marginLR},${badgeTop},1`);
+  L.push("","[Events]","Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text");
+  for (const seg of SEGMENTS) {
+    const lines = wrapText(seg.text, S.chars);
+    const hl = S.effectsOn ? pickHighlight(seg.text, S.rule) : null;
+    const hp = hl ? seg.text.indexOf(hl) : -1;
+    let idx = 0; const rendered = [];
+    for (const line of lines) {
+      const a0 = idx, a1 = idx + [...line].length; idx = a1;
+      let out = line;
+      if (hl && hp < a1 && hp+hl.length > a0) {
+        const a = Math.max(hp,a0)-a0, b = Math.min(hp+hl.length,a1)-a0;
+        const ch = [...line];
+        out = ch.slice(0,a).join("") + "{\\c"+hlInline+"}" + ch.slice(a,b).join("") + "{\\c"+prInline+"}" + ch.slice(b).join("");
+      }
+      rendered.push(out);
+    }
+    let body = rendered.join("\\N");
+    if (S.effectsOn) body = `{\\fad(${S.fadeMs},0)}` + body;
+    L.push(`Dialogue: 0,${assTime(seg.start)},${assTime(seg.end)},Default,,0,0,0,,${body}`);
+  }
+  if (S.effectsOn && S.badgeOn) {
+    const lastEnd = SEGMENTS[SEGMENTS.length-1].end;
+    for (let i=0;i<CHAPTERS.length;i++) {
+      const cStart = CHAPTERS[i].start;
+      const cEnd = i+1<CHAPTERS.length ? CHAPTERS[i+1].start : lastEnd;
+      if (cEnd <= cStart) continue;
+      const speaking = SEGMENTS.some(s => s.start < cEnd && s.end > cStart);
+      let tag = `{\\pos(${W-marginLR},${badgeTop})}`;
+      if (speaking && S.badgeShrink) tag += `{\\fs${Math.trunc(badgeFs*0.6)}\\1a&H80&}`;
+      L.push(`Dialogue: 1,${assTime(cStart)},${assTime(cEnd)},Badge,,0,0,0,,${tag}${CHAPTERS[i].label}`);
+    }
+  }
+  return L.join("\r\n") + "\r\n";
+}
+function download(name, text, mime) {
+  const blob = new Blob([text], {type: mime || "text/plain;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function exportAss() {
+  const name = S.effectsOn ? "工作台_轻动效.ass" : "工作台_无动效.ass";
+  download(name, buildAss());
+  toast(`已导出 <b>${name}</b>（与当前参数一致）`);
+}
+$("btnAss").addEventListener("click", exportAss);
+$("btnJson").addEventListener("click", () => {
+  const tpl = {
+    orientation:"portrait",
+    chars_per_line:{portrait:[Math.max(12,S.chars-4), S.chars], landscape:[16,22]},
+    max_lines:2,
+    safe_area:{left_pct:S.safeLR, right_pct:S.safeLR, bottom_pct:S.marginV},
+    font:{name:"Microsoft YaHei", size_portrait:S.fs, size_landscape:36},
+    colors:{primary:"&H00FFFFFF", outline:"&H00000000", highlight:hexToAssStyle(S.hl)},
+    effects:{fade_in_ms:S.fadeMs, highlight_max_per_segment:1,
+             badge:{enabled:S.badgeOn, position:"top_right", shrink_when_speaking:S.badgeShrink}},
+    workbench_extra:{outline:S.outline, badge_fs_pct:S.badgeFsPct, highlight_rule:S.rule}
+  };
+  download("工作台_模板参数.json", JSON.stringify(tpl, null, 2), "application/json;charset=utf-8");
+  toast("已导出模板 JSON · 可直接 <b>effects.py --template</b>");
+});
+
+/* ---- toast ---- */
+let toastTimer = 0;
+function toast(html) {
+  const t = $("toast");
+  t.innerHTML = html; t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2400);
+}
+
+/* ---- 主循环（单一 rAF） ---- */
+function tick() {
+  const playing = cmpIsPlaying();
+  if (playing !== lastPlayingShown) {
+    lastPlayingShown = playing;
+    $("icoCmpPlay").style.display = playing ? "none" : "block";
+    $("icoCmpPause").style.display = playing ? "block" : "none";
+  }
+  const t = vOff.currentTime || 0;
+  const seg = segAt(t);
+  markActiveSeg(seg ? seg.index : -1);
+  headCmp.style.left = (t/DUR*100) + "%";
+  const segIdx = seg ? seg.index : -1;
+  for (const d of cmpSegEls) d.classList.toggle("act", +d.dataset.idx === segIdx);
+  $("cmpCur").textContent = fmt(t);
+  if (playing) {
+    const drift = Math.abs(vOff.currentTime - vLight.currentTime);
+    if (drift > 0.08) vLight.currentTime = vOff.currentTime;
+    const dEl = $("cmpDelta");
+    dEl.textContent = `Δ ${Math.round(drift*1000)}ms`;
+    dEl.classList.toggle("warn", drift > 0.08);
+  }
+  /* 预览舞台叠加 */
+  const mp = !vMain.paused;
+  if (mp !== lastMainPlaying) {
+    lastMainPlaying = mp;
+    $("icoMainPlay").style.display = mp ? "none" : "block";
+    $("icoMainPause").style.display = mp ? "block" : "none";
+  }
+  const tm = vMain.currentTime || 0;
+  const segM = segAt(tm);
+  renderSubtitle(segM, tm);
+  renderBadge(tm);
+  $("ovTime").textContent = fmt(tm);
+  $("tCur").textContent = fmt(tm);
+  headMain.style.left = (tm/DUR*100) + "%";
+  const segIdxM = segM ? segM.index : -1;
+  for (const d of mainSegEls) d.classList.toggle("act", +d.dataset.idx === segIdxM);
+  requestAnimationFrame(tick);
+}
+
+/* ---- 键盘 ---- */
+document.addEventListener("keydown", e => {
+  const tag = (e.target.tagName||"").toUpperCase();
+  if (["INPUT","SELECT","TEXTAREA"].includes(tag) || e.target.isContentEditable) return;
+  if (e.code === "Space") { if (tag === "BUTTON") return; e.preventDefault(); $("btnCmpPlay").click(); }
+  else if (e.code === "ArrowLeft") { e.preventDefault(); stepCmp(-1/FPS); }
+  else if (e.code === "ArrowRight") { e.preventDefault(); stepCmp(1/FPS); }
+});
+
+/* ---- 滚动显现 & 导航状态 ---- */
+const io = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } }), {threshold:0.08});
+document.querySelectorAll(".rise").forEach(el => io.observe(el));
+const navIo = new IntersectionObserver(es => es.forEach(en => {
+  if (en.isIntersecting) {
+    document.querySelectorAll("#nav a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#"+en.target.id));
+  }
+}), {rootMargin:"-40% 0px -55% 0px"});
+["tune","compare","files"].forEach(id => navIo.observe($(id)));
+
+/* ---- 启动 ---- */
+buildSegList();
+syncControls();
+rescale();
+new ResizeObserver(rescale).observe(stageWrap);
+renderSubtitle(segAt(0), 0);
+renderBadge(0);
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

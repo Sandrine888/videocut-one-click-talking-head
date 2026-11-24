@@ -1,0 +1,28 @@
+{
+  "video": "C:\\Users\\gjx81\\Desktop\\qoder cn工作区\\一键剪口播项目d\\社团项目\\d_output\\微信视频2026-11-21_213120_116_cut_light.mp4",
+  "ass": "C:\\Users\\gjx81\\Desktop\\qoder cn工作区\\一键剪口播项目d\\社团项目\\d_output\\微信视频2026-11-21_213120_116_cut_light.ass",
+  "orientation": "portrait",
+  "play_res": [
+    1080,
+    1920
+  ],
+  "duration_s": 46.267,
+  "frames_extracted": 122,
+  "frame_dir": "C:\\Users\\gjx81\\Desktop\\qoder cn工作区\\一键剪口播项目d\\社团项目\\d_output\\frames",
+  "checks": {
+    "face_block": 0,
+    "edge_touch": 0,
+    "over_two_lines": 0
+  },
+  "violations": [],
+  "fade": {
+    "count": 24,
+    "min_ms": 120,
+    "max_ms": 120
+  },
+  "highlight": {
+    "total_segments": 24,
+    "max_per_segment": 1,
+    "segments_with_highlight": 2
+  }
+}
