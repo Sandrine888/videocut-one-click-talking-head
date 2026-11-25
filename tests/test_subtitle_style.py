@@ -68,6 +68,31 @@ class SubtitleStyleTests(unittest.TestCase):
         self.assertTrue(face_event.endswith(r"{\1c&H96DAFF&}ASR{\1c&HEEF9FF&}"))
         self.assertEqual(face_event.count(r"\1c"), 2)
 
+    def test_source_han_enables_bold_accent_and_separate_opening_title(self):
+        style = load_style(720, 1280, font="Source Han Sans SC Medium")
+        cue = SubtitleCue("1", 1234, 3001, "测试 ASR 字幕")
+        ass, report = build_ass(
+            [cue], style, accent_terms=("ASR",), source_han=True, opening_title=r"剪辑 {样片}",
+        )
+        self.assertIn(r"\fnSource Han Sans SC\b700}ASR", ass)
+        self.assertIn(r"\fnSource Han Sans SC Medium\b0}", ass)
+        self.assertIn(r"剪辑 \{样片\}", ass)
+        self.assertIn("Dialogue: 2,0:00:00.25,0:00:03.05", ass)
+        self.assertIn("Dialogue: 1,0:00:01.23,0:00:03.00", ass)
+        self.assertEqual(report[0]["accent"], "ASR")
+
+    def test_source_han_rejects_missing_assets_before_burn_in(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(ValueError, "Missing Source Han font"):
+                burn_subtitles(root / "a.mp4", root / "a.srt", root / "b.mp4", source_han_dir=root)
+
+    def test_opening_title_rejects_invalid_text(self):
+        with self.assertRaisesRegex(ValueError, "single line"):
+            build_ass([], self.vertical, source_han=True, opening_title="第一行\n第二行")
+        with self.assertRaisesRegex(ValueError, "requires"):
+            build_ass([], self.vertical, opening_title="剪辑")
+
     def test_utf8_bom_and_exact_millisecond_timing(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "example.srt"

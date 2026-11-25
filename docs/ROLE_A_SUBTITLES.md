@@ -13,6 +13,22 @@ python -m unittest tests.test_subtitle_style -v
 
 这一版使用暖白、细描边和柔阴影。重复传入 `--accent-term` 可指定待强调的术语，按传入顺序选每条字幕中第一个匹配词组；没有匹配时整条显示暖白。强调词也参与换行保护。原 SRT 的文字和时间不变，自检逐条记录实际采用的强调词。
 
+### 思源字体试样
+
+从 Adobe 的官方发行页取得三个简体中文 OTF 文件，放在同一个仓库外目录。正文使用 `SourceHanSansSC-Medium.otf`，重点词使用 `SourceHanSansSC-Bold.otf`，可选片头使用 `SourceHanSerifSC-SemiBold.otf`。
+
+```powershell
+python -m videocut.output.local "试验3.mp4" "portrait.srt" "styled-font.mp4" `
+  --source-han-dir "..\fonts" --opening-title "视频剪辑" --report "layout.json" `
+  --accent-term "视频剪辑" --accent-term "停顿、口误和重复" --accent-term "ASR" `
+  --accent-term "LLM" --accent-term "时间戳" --accent-term "转录的准确性" `
+  --accent-term "跳切" --protect-term "自动语音识别" --protect-term "大语言模型"
+```
+
+`--source-han-dir` 将字体提供给当前渲染进程。省略 `--opening-title` 时只渲染字幕。片头持续 0.25–3.05 秒，独立于 SRT 时间轴。自检记录字体配置和片头文字。
+
+[思源黑体官方发行页](https://github.com/adobe-fonts/source-han-sans/releases) · [思源宋体官方发行页](https://github.com/adobe-fonts/source-han-serif/releases)
+
 ## 与 B、C、D、E 对接
 
 | 对接方 | 输入或调用 | 约定 |

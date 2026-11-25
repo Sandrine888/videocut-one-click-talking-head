@@ -1,6 +1,6 @@
 """Static styling and layout contract shared by render, effects, and verification."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib.resources import files
 import json
 import math
@@ -200,21 +200,29 @@ def _accent_span(lines: tuple[str, ...], terms: tuple[str, ...]) -> tuple[int, i
     return None
 
 
-def _colored_text(lines: tuple[str, ...], span: tuple[int, int, int] | None, style: SubtitleStyle) -> str:
+def _styled_text(lines: tuple[str, ...], span: tuple[int, int, int] | None, style: SubtitleStyle, *,
+                 source_han: bool, shadow: bool = False) -> str:
     rows = list(map(_ass_text, lines))
     if span is not None:
         row, start, end = span
         line = lines[row]
         accent = _ass_color(style.accent_color)[4:]
         base = _ass_color(style.text_color)[4:]
-        rows[row] = (
-            _ass_text(line[:start]) + rf"{{\1c&H{accent}&}}"
-            + _ass_text(line[start:end]) + rf"{{\1c&H{base}&}}" + _ass_text(line[end:])
-        )
+        accent_tags = "" if shadow else rf"\1c&H{accent}&"
+        base_tags = "" if shadow else rf"\1c&H{base}&"
+        if source_han:
+            accent_tags += r"\fnSource Han Sans SC\b700"
+            base_tags += r"\fnSource Han Sans SC Medium\b0"
+        if accent_tags:
+            rows[row] = (
+                _ass_text(line[:start]) + "{" + accent_tags + "}"
+                + _ass_text(line[start:end]) + "{" + base_tags + "}" + _ass_text(line[end:])
+            )
     return r"\N".join(rows)
 
 
-def build_ass(cues: list[SubtitleCue], style: SubtitleStyle, *, protected_terms=(), accent_terms=()) -> tuple[str, list[dict]]:
+def build_ass(cues: list[SubtitleCue], style: SubtitleStyle, *, protected_terms=(), accent_terms=(),
+              source_han: bool = False, opening_title: str | None = None) -> tuple[str, list[dict]]:
     """Return styled libass events and the exact display rows checked by E."""
     accent_terms = tuple(accent_terms)
     protected_terms = (*protected_terms, *accent_terms)
@@ -222,6 +230,7 @@ def build_ass(cues: list[SubtitleCue], style: SubtitleStyle, *, protected_terms=
     shadow_blur = round(style.font_px * 0.10, 2)
     side = style.margin_x + style.padding_px
     bottom = style.margin_y + style.padding_px + math.ceil(style.outline_px + shadow_blur)
+    bold = 0 if source_han else -1
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {style.width}
@@ -231,8 +240,8 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: RoleA,{style.font},{style.font_px},{_ass_color(style.text_color)},{_ass_color(style.accent_color)},{_ass_color(style.outline_color, 0.79)},{shadow},-1,0,0,0,100,100,0,0,1,{style.outline_px},0,2,{side},{side},{bottom},1
-Style: RoleAShadow,{style.font},{style.font_px},{shadow},{shadow},{shadow},{shadow},-1,0,0,0,100,100,0,0,1,{style.outline_px * 1.6:.2f},0,2,{side},{side},{bottom - max(1, round(style.font_px * 0.05))},1
+Style: RoleA,{style.font},{style.font_px},{_ass_color(style.text_color)},{_ass_color(style.accent_color)},{_ass_color(style.outline_color, 0.79)},{shadow},{bold},0,0,0,100,100,0,0,1,{style.outline_px},0,2,{side},{side},{bottom},1
+Style: RoleAShadow,{style.font},{style.font_px},{shadow},{shadow},{shadow},{shadow},{bold},0,0,0,100,100,0,0,1,{style.outline_px * 1.6:.2f},0,2,{side},{side},{bottom - max(1, round(style.font_px * 0.05))},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -250,8 +259,21 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         if check["ok"]:
             span = _accent_span(lines, accent_terms)
             check["accent"] = lines[span[0]][span[1]:span[2]] if span is not None else None
-            plain = r"\N".join(map(_ass_text, lines))
+            plain = _styled_text(lines, span, style, source_han=source_han, shadow=True)
             shadow_text = rf"{{\blur{shadow_blur}}}" + plain
+            face = _styled_text(lines, span, style, source_han=source_han)
             events.append(f"Dialogue: 0,{start},{end},RoleAShadow,,0,0,0,,{shadow_text}\n")
-            events.append(f"Dialogue: 1,{start},{end},RoleA,,0,0,0,,{_colored_text(lines, span, style)}\n")
+            events.append(f"Dialogue: 1,{start},{end},RoleA,,0,0,0,,{face}\n")
+    if opening_title is not None:
+        title = opening_title.strip()
+        title_size = max(1, round(min(style.width, style.height) * 0.086))
+        if not title or len(title.splitlines()) != 1 or any(unicodedata.category(c)[0] == "C" for c in title):
+            raise ValueError("The opening title must be a non-empty single line of text")
+        if not source_han:
+            raise ValueError("The opening title requires the Source Han font preset")
+        if estimated_width(title, replace(style, font_px=title_size)) > style.text_width_px:
+            raise ValueError("The opening title does not fit within the safe area")
+        x, y = style.margin_x + max(1, round(style.width * 0.004)), round(style.height * 0.061)
+        tags = rf"{{\an7\pos({x},{y})\fnSource Han Serif SC SemiBold\fs{title_size}\b0\bord0\shad0\1c&H251E18&\fad(170,240)}}"
+        events.append(f"Dialogue: 2,0:00:00.25,0:00:03.05,RoleA,,0,0,0,,{tags}{_ass_text(title)}\n")
     return header + "".join(events), checks

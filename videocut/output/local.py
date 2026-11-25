@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 
@@ -13,6 +14,11 @@ from ..subtitle_style import SubtitleCue, build_ass, load_style
 
 _CLOCK = r"(\d{2,}):([0-5]\d):([0-5]\d)[,.](\d{3})"
 _TIMING = re.compile(rf"^{_CLOCK}\s*-->\s*{_CLOCK}(?:[ \t].*)?$")
+_SOURCE_HAN_FONTS = (
+    "SourceHanSansSC-Medium.otf",
+    "SourceHanSansSC-Bold.otf",
+    "SourceHanSerifSC-SemiBold.otf",
+)
 
 
 def _milliseconds(parts: tuple[str, ...]) -> int:
@@ -84,6 +90,8 @@ def burn_subtitles(
     protected_terms: tuple[str, ...] = (),
     accent_terms: tuple[str, ...] = (),
     font: str | None = None,
+    source_han_dir: str | Path | None = None,
+    opening_title: str | None = None,
 ) -> dict:
     """Burn static captions and return the structured report shared with verification."""
     source, srt, target = (Path(path).resolve() for path in (video_path, srt_path, output_path))
@@ -92,10 +100,23 @@ def burn_subtitles(
         raise ValueError("Input, SRT, output, and report must be distinct files")
     if target.suffix.lower() != ".mp4":
         raise ValueError("Output path must end in .mp4")
+    bundled_fonts = ()
+    if source_han_dir is not None:
+        if font is not None:
+            raise ValueError("Use either a custom font or the Source Han preset")
+        font_root = Path(source_han_dir).resolve()
+        bundled_fonts = tuple(font_root / name for name in _SOURCE_HAN_FONTS)
+        for path in bundled_fonts:
+            if not path.is_file():
+                raise ValueError(f"Missing Source Han font: {path.name}")
+        font = "Source Han Sans SC Medium"
     cues = read_srt(srt)
     video = _probe_video(source)
     style = load_style(video.width, video.height, font=font)
-    ass, checks = build_ass(cues, style, protected_terms=protected_terms, accent_terms=accent_terms)
+    ass, checks = build_ass(
+        cues, style, protected_terms=protected_terms, accent_terms=accent_terms,
+        source_han=bool(bundled_fonts), opening_title=opening_title,
+    )
     failed = sum(not item["ok"] for item in checks)
     report = {
         "schema_version": 1,
@@ -106,6 +127,10 @@ def burn_subtitles(
         "style": asdict(style),
         "cues": checks,
     }
+    if bundled_fonts:
+        report["font_preset"] = "source_han"
+        report["opening_title"] = opening_title.strip() if opening_title is not None else None
+
     def write_report() -> None:
         if report_target is not None:
             report_target.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -118,6 +143,13 @@ def burn_subtitles(
     # A fixed filter-local filename avoids Windows drive and quote escaping in the filter graph.
     with tempfile.TemporaryDirectory(prefix="videocut-subtitles-") as temp:
         (Path(temp) / "captions.ass").write_text(ass, encoding="utf-8")
+        filtergraph = "ass=captions.ass"
+        if bundled_fonts:
+            font_stage = Path(temp) / "fonts"
+            font_stage.mkdir()
+            for font_file in bundled_fonts:
+                shutil.copyfile(font_file, font_stage / font_file.name)
+            filtergraph += ":fontsdir=fonts"
         with tempfile.NamedTemporaryFile(prefix=".videocut-", suffix=".mp4", dir=target.parent, delete=False) as stage:
             pending = Path(stage.name)
         try:
@@ -125,7 +157,7 @@ def burn_subtitles(
                 [
                     "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
                     "-i", str(source), "-map", f"0:{video.stream_index}", "-map", "0:a:0?",
-                    "-vf", "ass=captions.ass", "-c:v", "libx264", "-preset", "medium",
+                    "-vf", filtergraph, "-c:v", "libx264", "-preset", "medium",
                     "-crf", "18", "-pix_fmt", "yuv420p", "-fps_mode", "passthrough",
                     "-c:a", "copy" if video.audio_codec == "aac" else "aac",
                     "-movflags", "+faststart", str(pending),
@@ -146,7 +178,10 @@ def main() -> None:
     parser.add_argument("srt", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--report", type=Path, help="Write per-cue layout results as JSON.")
-    parser.add_argument("--font", help="Override the default installed CJK font family.")
+    fonts = parser.add_mutually_exclusive_group()
+    fonts.add_argument("--font", help="Override the default installed CJK font family.")
+    fonts.add_argument("--source-han-dir", type=Path, help="Load the three Source Han OTFs from this directory.")
+    parser.add_argument("--opening-title", help="Add an opening title using Source Han Serif Semibold.")
     parser.add_argument("--protect-term", action="append", default=[], help="Keep a term together at line breaks.")
     parser.add_argument("--accent-term", action="append", default=[], help="Highlight the first matching term per cue.")
     args = parser.parse_args()
@@ -154,6 +189,7 @@ def main() -> None:
         result = burn_subtitles(
             args.video, args.srt, args.output, report_path=args.report,
             protected_terms=tuple(args.protect_term), accent_terms=tuple(args.accent_term), font=args.font,
+            source_han_dir=args.source_han_dir, opening_title=args.opening_title,
         )
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         parser.exit(1, f"Subtitle burn-in failed: {getattr(exc, 'stderr', None) or exc}\n")
