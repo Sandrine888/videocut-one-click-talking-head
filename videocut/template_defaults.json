@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "font_windows": "Microsoft YaHei",
+  "font_other": "Noto Sans CJK SC",
+  "text_color": "#FFFDF8",
+  "outline_color": "#151B25",
+  "box_color": "#151B25",
+  "box_opacity": 0.78,
+  "accent_color": "#F7CF76",
+  "max_lines": 2,
+  "side_margin_ratio": 0.08,
+  "bottom_margin_ratio": 0.15,
+  "fade_in_ms": 120,
+  "chapter_badge_ms": 1200,
+  "portrait": {"target_min_chars": 12, "max_chars": 16, "font_short_edge_ratio": 0.05},
+  "landscape": {"target_min_chars": 16, "max_chars": 22, "font_short_edge_ratio": 0.06}
+}
