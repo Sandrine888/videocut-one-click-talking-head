@@ -25,8 +25,8 @@ class SubtitleStyle:
     max_lines: int
     text_color: str
     outline_color: str
-    box_color: str
-    box_opacity: float
+    shadow_color: str
+    shadow_opacity: float
     accent_color: str
     fade_in_ms: int
     chapter_badge_ms: int
@@ -63,15 +63,15 @@ def load_style(width: int, height: int, *, font: str | None = None) -> SubtitleS
         font_px=font_px,
         margin_x=math.ceil(width * template["side_margin_ratio"]),
         margin_y=math.ceil(height * template["bottom_margin_ratio"]),
-        padding_px=max(1, round(font_px * 0.22)),
-        outline_px=round(font_px * 0.03, 2),
+        padding_px=max(1, math.ceil(font_px * 0.20)),
+        outline_px=round(font_px * 0.052, 2),
         target_min_chars=preset["target_min_chars"],
         max_chars=preset["max_chars"],
         max_lines=template["max_lines"],
         text_color=template["text_color"],
         outline_color=template["outline_color"],
-        box_color=template["box_color"],
-        box_opacity=template["box_opacity"],
+        shadow_color=template["shadow_color"],
+        shadow_opacity=template["shadow_opacity"],
         accent_color=template["accent_color"],
         fade_in_ms=template["fade_in_ms"],
         chapter_badge_ms=template["chapter_badge_ms"],
@@ -88,14 +88,14 @@ def visible_count(text: str) -> int:
 
 
 def estimated_width(text: str, style: SubtitleStyle) -> int:
-    """Conservative layout estimate, in pixels. Visual QA still uses rendered frames."""
+    """Approximate libass glyph advance. Visual QA still uses rendered frames."""
     widths = []
     for character in text:
         if character.isspace():
             widths.append(0.43)
         elif _is_visible(character):
             if unicodedata.east_asian_width(character) in {"F", "W", "A"}:
-                widths.append(1.0)
+                widths.append(0.90)
             elif character in "MWmw@%":
                 widths.append(1.02)
             elif character.isascii():
@@ -184,9 +184,44 @@ def _ass_text(line: str) -> str:
     return line.replace("\\", "\\\u200b").replace("{", r"\{").replace("}", r"\}")
 
 
-def build_ass(cues: list[SubtitleCue], style: SubtitleStyle, *, protected_terms=()) -> tuple[str, list[dict]]:
+def _accent_span(lines: tuple[str, ...], terms: tuple[str, ...]) -> tuple[int, int, int] | None:
+    for term in terms:
+        if not term.strip():
+            continue
+        pattern = re.escape(term)
+        if term[0].isascii() and term[0].isalnum():
+            pattern = r"(?<![A-Za-z0-9])" + pattern
+        if term[-1].isascii() and term[-1].isalnum():
+            pattern += r"(?![A-Za-z0-9])"
+        for row, line in enumerate(lines):
+            match = re.search(pattern, line)
+            if match:
+                return row, match.start(), match.end()
+    return None
+
+
+def _colored_text(lines: tuple[str, ...], span: tuple[int, int, int] | None, style: SubtitleStyle) -> str:
+    rows = list(map(_ass_text, lines))
+    if span is not None:
+        row, start, end = span
+        line = lines[row]
+        accent = _ass_color(style.accent_color)[4:]
+        base = _ass_color(style.text_color)[4:]
+        rows[row] = (
+            _ass_text(line[:start]) + rf"{{\1c&H{accent}&}}"
+            + _ass_text(line[start:end]) + rf"{{\1c&H{base}&}}" + _ass_text(line[end:])
+        )
+    return r"\N".join(rows)
+
+
+def build_ass(cues: list[SubtitleCue], style: SubtitleStyle, *, protected_terms=(), accent_terms=()) -> tuple[str, list[dict]]:
     """Return styled libass events and the exact display rows checked by E."""
-    protected_terms = tuple(protected_terms)
+    accent_terms = tuple(accent_terms)
+    protected_terms = (*protected_terms, *accent_terms)
+    shadow = _ass_color(style.shadow_color, style.shadow_opacity)
+    shadow_blur = round(style.font_px * 0.10, 2)
+    side = style.margin_x + style.padding_px
+    bottom = style.margin_y + style.padding_px + math.ceil(style.outline_px + shadow_blur)
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {style.width}
@@ -196,7 +231,8 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: RoleA,{style.font},{style.font_px},{_ass_color(style.text_color)},{_ass_color(style.accent_color)},{_ass_color(style.outline_color)},{_ass_color(style.box_color, style.box_opacity)},-1,0,0,0,100,100,0,0,4,{style.outline_px},{style.padding_px},2,{style.margin_x + style.padding_px},{style.margin_x + style.padding_px},{style.margin_y + style.padding_px + math.ceil(style.outline_px)},1
+Style: RoleA,{style.font},{style.font_px},{_ass_color(style.text_color)},{_ass_color(style.accent_color)},{_ass_color(style.outline_color, 0.79)},{shadow},-1,0,0,0,100,100,0,0,1,{style.outline_px},0,2,{side},{side},{bottom},1
+Style: RoleAShadow,{style.font},{style.font_px},{shadow},{shadow},{shadow},{shadow},-1,0,0,0,100,100,0,0,1,{style.outline_px * 1.6:.2f},0,2,{side},{side},{bottom - max(1, round(style.font_px * 0.05))},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -212,6 +248,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             check["issues"].append({"code": "below_render_time_resolution", "actual": cue.end_ms - cue.start_ms, "limit": 10})
             check["ok"] = False
         if check["ok"]:
-            text = r"\N".join(map(_ass_text, lines))
-            events.append(f"Dialogue: 0,{start},{end},RoleA,,0,0,0,,{text}\n")
+            span = _accent_span(lines, accent_terms)
+            check["accent"] = lines[span[0]][span[1]:span[2]] if span is not None else None
+            plain = r"\N".join(map(_ass_text, lines))
+            shadow_text = rf"{{\blur{shadow_blur}}}" + plain
+            events.append(f"Dialogue: 0,{start},{end},RoleAShadow,,0,0,0,,{shadow_text}\n")
+            events.append(f"Dialogue: 1,{start},{end},RoleA,,0,0,0,,{_colored_text(lines, span, style)}\n")
     return header + "".join(events), checks

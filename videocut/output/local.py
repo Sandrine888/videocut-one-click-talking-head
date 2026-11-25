@@ -82,6 +82,7 @@ def burn_subtitles(
     *,
     report_path: str | Path | None = None,
     protected_terms: tuple[str, ...] = (),
+    accent_terms: tuple[str, ...] = (),
     font: str | None = None,
 ) -> dict:
     """Burn static captions and return the structured report shared with verification."""
@@ -94,7 +95,7 @@ def burn_subtitles(
     cues = read_srt(srt)
     video = _probe_video(source)
     style = load_style(video.width, video.height, font=font)
-    ass, checks = build_ass(cues, style, protected_terms=protected_terms)
+    ass, checks = build_ass(cues, style, protected_terms=protected_terms, accent_terms=accent_terms)
     failed = sum(not item["ok"] for item in checks)
     report = {
         "schema_version": 1,
@@ -147,11 +148,12 @@ def main() -> None:
     parser.add_argument("--report", type=Path, help="Write per-cue layout results as JSON.")
     parser.add_argument("--font", help="Override the default installed CJK font family.")
     parser.add_argument("--protect-term", action="append", default=[], help="Keep a term together at line breaks.")
+    parser.add_argument("--accent-term", action="append", default=[], help="Highlight the first matching term per cue.")
     args = parser.parse_args()
     try:
         result = burn_subtitles(
             args.video, args.srt, args.output, report_path=args.report,
-            protected_terms=tuple(args.protect_term), font=args.font,
+            protected_terms=tuple(args.protect_term), accent_terms=tuple(args.accent_term), font=args.font,
         )
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         parser.exit(1, f"Subtitle burn-in failed: {getattr(exc, 'stderr', None) or exc}\n")

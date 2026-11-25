@@ -59,6 +59,15 @@ class SubtitleStyleTests(unittest.TestCase):
         self.assertEqual(report[0]["lines"], [cue.text])
         self.assertFalse(report[0]["ok"])
 
+    def test_accent_is_one_whole_term_without_changing_layout(self):
+        cue = SubtitleCue("x", 0, 2000, "ASR2 和 LLM，然后 ASR")
+        ass, report = build_ass([cue], self.vertical, accent_terms=("ASR", "LLM"))
+        self.assertEqual(report[0]["lines"], [cue.text])
+        self.assertEqual(report[0]["accent"], "ASR")
+        face_event = next(line for line in ass.splitlines() if line.startswith("Dialogue: 1"))
+        self.assertTrue(face_event.endswith(r"{\1c&H96DAFF&}ASR{\1c&HEEF9FF&}"))
+        self.assertEqual(face_event.count(r"\1c"), 2)
+
     def test_utf8_bom_and_exact_millisecond_timing(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "example.srt"
