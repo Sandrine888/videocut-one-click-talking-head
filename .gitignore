@@ -69,10 +69,13 @@ installer/
 *.transcript.json
 
 # 演示、评测与文档流水线的本地产物（不入库）
-output/
+/output/
 results/
 demo/
+/.videocut-work/
 
 # 本地运行配置与 Supabase CLI 缓存
 .videocut/
 supabase/.temp/
+
+/models/

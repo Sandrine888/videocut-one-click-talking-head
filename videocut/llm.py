@@ -139,15 +139,15 @@ class LLMClient:
 
         if self.provider == "openai":
             from openai import OpenAI
-            self._client = OpenAI(api_key=self.api_key)
+            self._client = OpenAI(api_key=self.api_key, timeout=60, max_retries=0)
 
         elif self.provider == "anthropic":
             from anthropic import Anthropic
-            self._client = Anthropic(api_key=self.api_key)
+            self._client = Anthropic(api_key=self.api_key, timeout=60, max_retries=0)
 
         elif self.provider == "compatible":
             from openai import OpenAI
-            self._client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+            self._client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=60, max_retries=0)
 
         return self._client
 

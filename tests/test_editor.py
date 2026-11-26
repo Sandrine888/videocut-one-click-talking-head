@@ -3,6 +3,7 @@
 """
 
 import pytest
+from pathlib import Path
 from videocut.editor import (
     calculate_keep_segments,
     generate_ffmpeg_filter,
@@ -142,19 +143,19 @@ class TestGetOutputPath:
         """默认后缀"""
         path = get_output_path("/path/to/video.mp4")
 
-        assert path == "/path/to/video_cut.mp4"
+        assert Path(path) == Path("/path/to/video_cut.mp4")
 
     def test_custom_suffix(self):
         """自定义后缀"""
         path = get_output_path("/path/to/video.mp4", "_final")
 
-        assert path == "/path/to/video_final.mp4"
+        assert Path(path) == Path("/path/to/video_final.mp4")
 
     def test_different_extension(self):
         """不同扩展名"""
         path = get_output_path("/path/to/video.mov", "_cut")
 
-        assert path == "/path/to/video_cut.mov"
+        assert Path(path) == Path("/path/to/video_cut.mov")
 
 
 class TestKeepSegment:
