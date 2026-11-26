@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import os
 import re
 import subprocess
 import sys
@@ -362,6 +363,47 @@ def _ffprobe_duration(video: str) -> float:
         return 0.0
 
 
+def ffprobe_size(video: str) -> Tuple[int, int]:
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=width,height", "-of", "csv=s=x:p=0", str(video)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    nums = re.findall(r"\d+", r.stdout)
+    if len(nums) >= 2:
+        return int(nums[0]), int(nums[1])
+    return 0, 0
+
+
+def detect_orientation(video: str) -> str:
+    w, h = ffprobe_size(video)
+    if not w or not h:
+        raise RuntimeError(f"无法读取视频分辨率: {video}")
+    return "landscape" if w >= h else "portrait"
+
+
+def segments_from_srt(path: str) -> List[Dict]:
+    subs = pysubs2.load(str(path), encoding="utf-8")
+    return [
+        {"index": i + 1, "start": e.start / 1000.0, "end": e.end / 1000.0,
+         "text": e.text.replace("\n", " ").strip()}
+        for i, e in enumerate(subs) if e.text.strip()
+    ]
+
+
+def auto_chapters(segments: List[Dict], min_s: float = 12.0) -> List[Dict]:
+    """按累计口播时长切章节，章节点对齐到某条字幕的起点（角标不跳在半句中间）。"""
+    chapters, cur_start, acc = [], 0.0, 0.0
+    for i, seg in enumerate(segments):
+        if i and acc >= min_s:
+            chapters.append({"start": seg["start"], "label": f"第{len(chapters) + 1}节"})
+            acc = 0.0
+        acc += seg["end"] - seg["start"]
+    if chapters:
+        chapters.insert(0, {"start": 0.0, "label": "开场"})
+    return chapters
+
+
 def _event_geometry(event, style, w: int, h: int, template: Dict) -> Dict:
     """从 ASS 事件推算渲染包围盒（保守估算）。"""
     raw = event.text
@@ -464,14 +506,15 @@ def check_frames(
 
     counts = {k: sum(1 for v in violations if v["kind"] == k)
               for k in ("face_block", "edge_touch", "over_two_lines")}
+    rel = lambda p: os.path.relpath(str(p), str(report_dir)).replace(os.sep, "/")
     report = {
-        "video": str(video),
-        "ass": str(ass_path),
+        "video": rel(video),
+        "ass": rel(ass_path),
         "orientation": orient,
         "play_res": [w, h],
         "duration_s": round(duration, 3),
         "frames_extracted": extracted,
-        "frame_dir": str(frame_dir),
+        "frame_dir": rel(frame_dir),
         "checks": counts,
         "violations": violations,
         "fade": {"count": len(fade_vals),
@@ -535,24 +578,39 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="D 模块 · 基础动效（见 PRD.md）")
     parser.add_argument("--demo", action="store_true", help="用内置样例独立跑通全部功能")
     parser.add_argument("--video", help="输入视频路径")
+    parser.add_argument("--srt", help="字幕 SRT 路径（与 --segments 二选一）")
     parser.add_argument("--segments", help="字幕片段 JSON 路径")
     parser.add_argument("--template", help="模板配置 JSON 路径（缺省用内置默认）")
-    parser.add_argument("--chapters", help="章节切换点 JSON 路径（可选）")
+    parser.add_argument("--orientation", choices=("auto", "portrait", "landscape"),
+                        default="auto", help="按视频实际宽高自动判定方向（默认）")
+    parser.add_argument("--chapters", help="章节切换点 JSON 路径（缺省自动生成）")
     parser.add_argument("--out", default="effects_output", help="输出目录")
     args = parser.parse_args()
 
     if args.demo:
         return run_demo(args.out)
 
-    if not args.video or not args.segments:
-        parser.error("非 demo 模式需要 --video 与 --segments")
-    with open(args.segments, "r", encoding="utf-8") as f:
-        segments = json.load(f)
-    chapters = None
+    if not args.video or not (args.srt or args.segments):
+        parser.error("非 demo 模式需要 --video 与 --srt/--segments")
+    if args.srt:
+        segments = segments_from_srt(args.srt)
+    else:
+        with open(args.segments, "r", encoding="utf-8") as f:
+            segments = json.load(f)
+    tpl = load_template(args.template)
+    if args.orientation == "auto":
+        tpl["orientation"] = detect_orientation(args.video)
+        print(f"[effects] 方向自动判定: {tpl['orientation']} "
+              f"({'x'.join(map(str, ffprobe_size(args.video)))})")
+    else:
+        tpl["orientation"] = args.orientation
     if args.chapters:
         with open(args.chapters, "r", encoding="utf-8") as f:
             chapters = json.load(f)
-    tpl = load_template(args.template)
+    else:
+        chapters = auto_chapters(segments)
+        print(f"[effects] 自动生成章节 {len(chapters)} 节: "
+              + " / ".join(c["label"] for c in chapters))
     paths = render_pair(args.video, segments, tpl, chapters, args.out)
     report = check_frames(paths["light"]["mp4"], paths["light"]["ass"], tpl,
                           str(Path(args.out) / "check_report.json"))

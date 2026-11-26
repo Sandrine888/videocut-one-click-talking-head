@@ -1,0 +1,28 @@
+{
+  "video": "cut_16x9_light.mp4",
+  "ass": "cut_16x9_light.ass",
+  "orientation": "landscape",
+  "play_res": [
+    1920,
+    1080
+  ],
+  "duration_s": 46.267,
+  "frames_extracted": 122,
+  "frame_dir": "frames",
+  "checks": {
+    "face_block": 0,
+    "edge_touch": 0,
+    "over_two_lines": 0
+  },
+  "violations": [],
+  "fade": {
+    "count": 24,
+    "min_ms": 120,
+    "max_ms": 120
+  },
+  "highlight": {
+    "total_segments": 24,
+    "max_per_segment": 1,
+    "segments_with_highlight": 2
+  }
+}

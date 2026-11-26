@@ -99,7 +99,10 @@ section{scroll-margin-top:calc(var(--header-h) + 14px); margin-bottom:34px}
 #tune{display:grid; grid-template-columns:minmax(240px,340px) minmax(280px,380px) minmax(280px,1fr); gap:18px; align-items:start}
 
 /* ---- 实时预览舞台 ---- */
-#stageCard .stage-wrap{position:relative; background:#000; aspect-ratio:9/16; width:min(100%, calc((100vh - 335px) * 9 / 16)); margin-inline:auto; overflow:hidden}
+#stageCard .stage-wrap{position:relative; background:#000; aspect-ratio:var(--vw,1080)/var(--vh,1920); width:min(100%, calc((100vh - 335px) * var(--vw,1080) / var(--vh,1920))); margin-inline:auto; overflow:hidden}
+.impbar{display:flex; gap:8px; align-items:center; padding:8px 12px; flex-wrap:wrap; border-bottom:1px solid var(--line)}
+.impbar .btn.sm{padding:5px 11px; font-size:.72rem}
+.imp-name{font-size:.68rem; color:var(--muted); letter-spacing:.03em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:46%}
 #stageCard .stage-wrap video{position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block}
 .overlay{position:absolute; inset:0; pointer-events:none; overflow:hidden}
 .ov-chip{position:absolute; top:2.2%; left:3%; font-size:.66rem; letter-spacing:.1em; color:var(--cyan);
@@ -174,7 +177,7 @@ input[type=color]{width:38px; height:26px; border:1px solid var(--line); border-
 
 /* ---- 烧录对照 ---- */
 .cmp-grid{display:grid; grid-template-columns:1fr 1fr minmax(240px,340px); gap:18px; align-items:start}
-.cmp-card .stage-wrap{position:relative; background:#000; aspect-ratio:9/16; width:min(100%, calc((100vh - 250px) * 9 / 16)); margin-inline:auto; overflow:hidden}
+.cmp-card .stage-wrap{position:relative; background:#000; aspect-ratio:var(--vw,1080)/var(--vh,1920); width:min(100%, calc((100vh - 250px) * var(--vw,1080) / var(--vh,1920))); margin-inline:auto; overflow:hidden}
 .cmp-card video{position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block}
 .cmp-label{position:absolute; top:2.2%; left:3%; z-index:2; font-size:.7rem; font-weight:700; letter-spacing:.1em;
   padding:3px 11px; border-radius:999px; backdrop-filter:blur(4px)}
@@ -279,7 +282,15 @@ footer b{color:var(--amber-deep)}
 <!-- ================= 调参 ================= -->
 <section id="tune">
   <div class="card sticky rise" id="stageCard">
-    <div class="card-h"><span class="dot" style="background:var(--cyan);box-shadow:0 0 10px var(--cyan)"></span>实时预览 · 参数即时生效<span class="tag">720×1280 · 46.27s</span></div>
+    <div class="card-h"><span class="dot" style="background:var(--cyan);box-shadow:0 0 10px var(--cyan)"></span>实时预览 · 参数即时生效<span class="tag" id="tagVideo">720×1280 · 46.27s</span></div>
+    <div class="impbar">
+      <button class="btn sm" id="btnImportVideo" title="选择任意口播视频，横竖屏自动适配">⬆ 导入视频</button>
+      <button class="btn sm" id="btnImportSubs" title="SRT 或 segments/chapters JSON">⬆ 导入字幕</button>
+      <button class="btn sm" id="btnLoadSample" title="恢复内置示例片">↺ 示例</button>
+      <span class="imp-name" id="impName">内置示例片</span>
+      <input type="file" id="fileVideo" accept="video/*" hidden>
+      <input type="file" id="fileSubs" accept=".srt,.json" hidden>
+    </div>
     <div class="stage-wrap" id="stageWrap">
       <video id="vMain" src="社团项目/微信视频2026-11-21_213120_116_cut.mp4" poster="社团项目/d_output/poster_clean.jpg" preload="metadata" playsinline></video>
       <div class="overlay" id="overlay">
@@ -295,7 +306,7 @@ footer b{color:var(--amber-deep)}
       <button class="tbtn" id="btnMainBack" title="后退一帧"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 20 9 12l10-8z"/><path d="M5 4v16"/></svg></button>
       <button class="tbtn play" id="btnMainPlay" title="播放 / 暂停预览"><svg id="icoMainPlay" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg><svg id="icoMainPause" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button>
       <button class="tbtn" id="btnMainFwd" title="前进一帧"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 4 10 8-10 8z"/><path d="M19 4v16"/></svg></button>
-      <span class="t-time"><b id="tCur">00:00.00</b> / 00:46.27</span>
+      <span class="t-time"><b id="tCur">00:00.00</b> / <b id="durMain">00:46.27</b></span>
       <span class="speed">倍速
         <select id="selSpeedMain" title="预览倍速">
           <option value="0.5">0.5×</option><option value="0.75">0.75×</option>
@@ -324,7 +335,7 @@ footer b{color:var(--amber-deep)}
       </div>
       <div class="grp">
         <div class="grp-t">字幕排版 TYPE</div>
-        <div class="row"><label for="rgFs">字号（PlayRes 1080×1920）</label><input type="range" id="rgFs" min="36" max="64" step="1" value="48"><span class="val" id="vFs">48</span></div>
+        <div class="row"><label for="rgFs" id="lbFs">字号（PlayRes 1080×1920）</label><input type="range" id="rgFs" min="36" max="64" step="1" value="48"><span class="val" id="vFs">48</span></div>
         <div class="row"><label for="rgChars">每行最多字数</label><input type="range" id="rgChars" min="12" max="16" step="1" value="16"><span class="val" id="vChars">16</span></div>
         <div class="row"><label for="rgMarginV">底部安全区 / 基线</label><input type="range" id="rgMarginV" min="10" max="20" step="1" value="15"><span class="val" id="vMarginV">15%</span></div>
         <div class="row"><label for="rgSafeLR">左右安全区</label><input type="range" id="rgSafeLR" min="4" max="12" step="1" value="8"><span class="val" id="vSafeLR">8%</span></div>
@@ -347,7 +358,7 @@ footer b{color:var(--amber-deep)}
   </div>
 
   <div class="card rise" id="segCard" style="transition-delay:.14s">
-    <div class="card-h"><span class="dot" style="background:var(--cyan);box-shadow:0 0 10px var(--cyan)"></span>字幕段落 · 24 条<span class="tag">点击定位到对照样片</span></div>
+    <div class="card-h"><span class="dot" style="background:var(--cyan);box-shadow:0 0 10px var(--cyan)"></span>字幕段落 · <span id="segCount">24</span> 条<span class="tag">点击定位到对照样片</span></div>
     <div class="card-b"><div class="seg-list" id="segList"></div></div>
   </div>
 </section>
@@ -364,9 +375,13 @@ footer b{color:var(--amber-deep)}
       </div>
     </div>
     <div class="card cmp-card rise" style="transition-delay:.08s">
-      <div class="stage-wrap">
+      <div class="stage-wrap" id="cmpLightWrap">
         <span class="cmp-label on">轻动效 · 淡入+高亮+角标</span>
         <video id="vLight" src="社团项目/d_output/微信视频2026-11-21_213120_116_cut_light.mp4" poster="社团项目/d_output/poster_light.jpg" preload="metadata" playsinline></video>
+        <div class="overlay" id="ovCmp" style="display:none">
+          <div class="ov-badge" id="ovCmpBadge"></div>
+          <div class="sub-box" id="ovCmpSub"></div>
+        </div>
       </div>
     </div>
     <div class="card rise" style="transition-delay:.14s">
@@ -377,7 +392,7 @@ footer b{color:var(--amber-deep)}
           <button class="tbtn play" id="btnCmpPlay" title="同步播放 / 暂停两版 (空格)"><svg id="icoCmpPlay" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg><svg id="icoCmpPause" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button>
           <button class="tbtn" id="btnFwd" title="前进一帧 (→)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 4 10 8-10 8z"/><path d="M19 4v16"/></svg></button>
           <button class="tbtn" id="btnCmpRestart" title="回到开头"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
-          <span class="t-time"><b id="cmpCur">00:00.00</b> / 00:46.27</span>
+          <span class="t-time"><b id="cmpCur">00:00.00</b> / <b id="durCmp">00:46.27</b></span>
           <span class="delta" id="cmpDelta" title="两版播放位置差">Δ 0ms</span>
           <span class="speed">倍速
             <select id="selSpeed" title="播放倍速（两版同步）">
@@ -418,8 +433,8 @@ footer b{color:var(--amber-deep)}
 
 <script>
 "use strict";
-/* ================= 数据（与 d_output/input/*.json 一致） ================= */
-const SEGMENTS = [
+/* ================= 数据（默认 = 内置示例，可被导入替换） ================= */
+const SAMPLE_SEGMENTS = [
  {index:1,start:0.540,end:2.700,text:"大家好，今天我想跟大家聊一聊"},
  {index:2,start:2.720,end:4.060,text:"视频剪辑这件事。"},
  {index:3,start:4.080,end:5.960,text:"其实很多人觉得剪辑很难，"},
@@ -445,14 +460,22 @@ const SEGMENTS = [
  {index:23,start:43.660,end:45.140,text:"好，以上就是今天的内容，"},
  {index:24,start:45.160,end:46.055,text:"谢谢大家。"}
 ];
-const CHAPTERS = [
+const SAMPLE_CHAPTERS = [
  {start:0.0,label:"开场"},
  {start:13.44,label:"第2节 · ASR 与 LLM"},
  {start:25.86,label:"第3节 · 时间戳对齐"},
  {start:37.48,label:"第4节 · 术语与收尾"}
 ];
+let SEGMENTS = SAMPLE_SEGMENTS, CHAPTERS = SAMPLE_CHAPTERS;
 const GLOSSARY = ["FunASR","VideoCut","FFmpeg","OpenAI","Claude","GPT","API","SRT","ASS","MP4","H.264","AAC","Whisper","ASR","LLM"];
-const W = 1080, H = 1920, DUR = 46.266667, FPS = 30;
+let W = 1080, H = 1920, DUR = 46.266667, orient = "portrait", cmpLive = false;
+const FPS = 30;
+const SAMPLE_SRC = {vMain:"社团项目/微信视频2026-11-21_213120_116_cut.mp4",
+                    vOff:"社团项目/d_output/微信视频2026-11-21_213120_116_cut_noeffects.mp4",
+                    vLight:"社团项目/d_output/微信视频2026-11-21_213120_116_cut_light.mp4"};
+const ORIENT_DEFAULTS = {
+  portrait:  {fs:48, chars:16, marginV:15, safeLR:8},
+  landscape: {fs:36, chars:22, marginV:10, safeLR:5}};
 const DEFAULTS = {effectsOn:true, fadeMs:120, rule:"glossary", hl:"#ffff00", fs:48, chars:16,
                   marginV:15, safeLR:8, outline:2, badgeOn:true, badgeShrink:true, badgeFsPct:55, speed:1};
 let S = {...DEFAULTS};
@@ -505,79 +528,86 @@ const chapterAt = t => {
 /* ================= DOM ================= */
 const $ = id => document.getElementById(id);
 const vMain = $("vMain"), vOff = $("vOff"), vLight = $("vLight");
-const ovSub = $("ovSub"), ovBadge = $("ovBadge"), stageWrap = $("stageWrap");
+const stageWrap = $("stageWrap"), cmpLightWrap = $("cmpLightWrap");
 let muted = false, activeSegIdx = -1, lastPlayingShown = false;
-let scale = 0.3, subKey = "", badgeKey = "", lastMainPlaying = false, showSafe = true, showFace = false;
+let lastMainPlaying = false, showSafe = true, showFace = false;
 
-/* ---- 预览叠加渲染（与 ASS 同一套参数） ---- */
+/* ---- 叠加渲染工厂（预览舞台与对照轻动效格共用，与 ASS 同一套参数） ---- */
 function outlineShadow(px) {
   if (px <= 0) return "none";
   const dirs = [[1,0],[-1,0],[0,1],[0,-1],[.7,.7],[-.7,.7],[.7,-.7],[-.7,-.7]];
   return dirs.map(([x,y]) => `${(x*px).toFixed(1)}px ${(y*px).toFixed(1)}px 0 #000`).join(",");
 }
-function renderSubtitle(seg, t) {
-  const key = seg ? seg.index + "|" + S.fs + "|" + S.chars + "|" + S.hl + "|" + S.rule + "|" + S.effectsOn + "|" + S.outline + "|" + S.marginV + "|" + S.safeLR : "none";
-  if (key !== subKey) {
-    subKey = key;
-    ovSub.innerHTML = "";
+function makeOverlay(subBox, badgeEl, wrapEl) {
+  let key = "", bkey = "";
+  const sc = () => wrapEl.clientHeight / H;
+  function style() {
+    const s = sc(), fsPx = S.fs * s;
+    subBox.style.bottom = S.marginV + "%";
+    subBox.style.left = S.safeLR + "%";
+    subBox.style.right = S.safeLR + "%";
+    for (const div of subBox.children) {
+      div.style.fontSize = fsPx.toFixed(2) + "px";
+      div.style.textShadow = outlineShadow(S.outline * s);
+      const hl = div.querySelector(".hl"); if (hl) hl.style.color = S.hl;
+    }
+  }
+  function render(seg, t) {
+    const k = seg ? seg.index + "|" + S.fs + "|" + S.chars + "|" + S.hl + "|" + S.rule + "|" + S.effectsOn + "|" + S.outline + "|" + S.marginV + "|" + S.safeLR + "|" + sc().toFixed(3) : "none";
+    if (k !== key) {
+      key = k;
+      subBox.innerHTML = "";
+      if (seg) {
+        const lines = wrapText(seg.text, S.chars);
+        const hl = S.effectsOn ? pickHighlight(seg.text, S.rule) : null;
+        const hp = hl ? seg.text.indexOf(hl) : -1;
+        let idx = 0;
+        for (const line of lines) {
+          const a0 = idx, a1 = idx + [...line].length; idx = a1;
+          const div = document.createElement("div");
+          div.className = "sub-line";
+          if (hl && hp < a1 && hp + hl.length > a0) {
+            const a = Math.max(hp, a0) - a0, b = Math.min(hp + hl.length, a1) - a0;
+            const chars = [...line];
+            div.append(chars.slice(0,a).join(""));
+            const sp = document.createElement("span"); sp.className = "hl"; sp.textContent = chars.slice(a,b).join("");
+            div.append(sp, chars.slice(b).join(""));
+          } else div.textContent = line;
+          subBox.appendChild(div);
+        }
+      }
+      style();
+    }
     if (seg) {
-      const lines = wrapText(seg.text, S.chars);
-      const hl = S.effectsOn ? pickHighlight(seg.text, S.rule) : null;
-      const hp = hl ? seg.text.indexOf(hl) : -1;
-      let idx = 0;
-      for (const line of lines) {
-        const a0 = idx, a1 = idx + [...line].length; idx = a1;
-        const div = document.createElement("div");
-        div.className = "sub-line";
-        if (hl && hp < a1 && hp + hl.length > a0) {
-          const a = Math.max(hp, a0) - a0, b = Math.min(hp + hl.length, a1) - a0;
-          const chars = [...line];
-          div.append(chars.slice(0,a).join(""));
-          const sp = document.createElement("span"); sp.className = "hl"; sp.textContent = chars.slice(a,b).join("");
-          div.append(sp, chars.slice(b).join(""));
-        } else div.textContent = line;
-        ovSub.appendChild(div);
+      const op = S.effectsOn ? Math.min(1, Math.max(0, (t - seg.start) / (S.fadeMs/1000))) : 1;
+      subBox.style.opacity = op.toFixed(3);
+    }
+  }
+  function badge(t) {
+    const ci = S.badgeOn && S.effectsOn ? chapterAt(t) : null;
+    const speaking = !!segAt(t) && S.badgeShrink;
+    const k = ci + "|" + speaking + "|" + S.fs + "|" + S.badgeFsPct + "|" + S.outline + "|" + S.safeLR + "|" + orient + "|" + sc().toFixed(3);
+    if (k !== bkey) {
+      bkey = k;
+      if (ci === null) { badgeEl.style.display = "none"; }
+      else {
+        badgeEl.style.display = "block";
+        badgeEl.textContent = CHAPTERS[ci].label;
+        const baseFs = Math.trunc(S.fs * S.badgeFsPct / 100);
+        const fsUsed = speaking ? Math.trunc(baseFs * 0.6) : baseFs;
+        badgeEl.style.fontSize = (fsUsed * sc()).toFixed(2) + "px";
+        badgeEl.style.opacity = speaking ? 0.5 : 1;
+        badgeEl.style.top = orient === "portrait" ? "8.5%" : "4.5%";
+        badgeEl.style.right = S.safeLR + "%";
+        badgeEl.style.textShadow = outlineShadow(S.outline * sc());
       }
     }
-    applySubStyle();
   }
-  if (seg) {
-    const op = S.effectsOn ? Math.min(1, Math.max(0, (t - seg.start) / (S.fadeMs/1000))) : 1;
-    ovSub.style.opacity = op.toFixed(3);
-  }
+  function invalidate() { key = ""; bkey = ""; }
+  return {render, badge, invalidate};
 }
-function applySubStyle() {
-  const fsPx = S.fs * scale;
-  ovSub.style.bottom = S.marginV + "%";
-  ovSub.style.left = S.safeLR + "%";
-  ovSub.style.right = S.safeLR + "%";
-  for (const div of ovSub.children) {
-    div.style.fontSize = fsPx.toFixed(2) + "px";
-    div.style.textShadow = outlineShadow(S.outline * scale);
-    const hl = div.querySelector(".hl"); if (hl) hl.style.color = S.hl;
-  }
-}
-function renderBadge(t) {
-  const ci = S.badgeOn && S.effectsOn ? chapterAt(t) : null;
-  const seg = segAt(t);
-  const speaking = !!seg && S.badgeShrink;
-  const key = ci + "|" + speaking + "|" + S.fs + "|" + S.badgeFsPct + "|" + S.outline + "|" + S.safeLR;
-  if (key !== badgeKey) {
-    badgeKey = key;
-    if (ci === null) { ovBadge.style.display = "none"; }
-    else {
-      ovBadge.style.display = "block";
-      ovBadge.textContent = CHAPTERS[ci].label;
-      const baseFs = Math.trunc(S.fs * S.badgeFsPct / 100);
-      const fsUsed = speaking ? Math.trunc(baseFs * 0.6) : baseFs;
-      ovBadge.style.fontSize = (fsUsed * scale).toFixed(2) + "px";
-      ovBadge.style.opacity = speaking ? 0.5 : 1;
-      ovBadge.style.top = "8.5%";
-      ovBadge.style.right = S.safeLR + "%";
-      ovBadge.style.textShadow = outlineShadow(S.outline * scale);
-    }
-  }
-}
+const ovStage = makeOverlay($("ovSub"), $("ovBadge"), stageWrap);
+const ovCmpLight = makeOverlay($("ovCmpSub"), $("ovCmpBadge"), cmpLightWrap);
 function applyGuides() {
   const gS = $("gSafe"), gF = $("gFace");
   gS.classList.toggle("off", !showSafe);
@@ -586,15 +616,15 @@ function applyGuides() {
   gS.querySelector("span").textContent = `安全区 · 左右${S.safeLR}% · 底${S.marginV}%`;
 }
 function rescale() {
-  scale = stageWrap.clientHeight / H;
-  subKey = ""; badgeKey = "";
-  applySubStyle(); applyGuides();
+  ovStage.invalidate(); ovCmpLight.invalidate();
+  applyGuides();
 }
 
 /* ---- 段落列表 ---- */
 function buildSegList() {
   const list = $("segList");
   list.innerHTML = "";
+  $("segCount").textContent = SEGMENTS.length;
   for (const seg of SEGMENTS) {
     const b = document.createElement("button");
     b.className = "seg-row"; b.dataset.idx = seg.index;
@@ -665,22 +695,30 @@ function buildTimeline(el, withChaps, onSeek) {
     const r = el.getBoundingClientRect();
     return Math.min(Math.max((ev.clientX - r.left)/r.width, 0), 1) * DUR;
   };
-  el.addEventListener("pointerdown", ev => {
-    try { el.setPointerCapture(ev.pointerId); } catch (_) {}
-    onSeek(seek(ev));
-    const move = e => onSeek(seek(e));
-    const up = () => { el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); };
-    el.addEventListener("pointermove", move);
-    el.addEventListener("pointerup", up);
-    el.addEventListener("pointercancel", up);
-  });
+  el._onSeek = onSeek;
+  if (!el._bound) {
+    el._bound = true;
+    el.addEventListener("pointerdown", ev => {
+      try { el.setPointerCapture(ev.pointerId); } catch (_) {}
+      el._onSeek(seek(ev));
+      const move = e => el._onSeek(seek(e));
+      const up = () => { el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); };
+      el.addEventListener("pointermove", move);
+      el.addEventListener("pointerup", up);
+      el.addEventListener("pointercancel", up);
+    });
+  }
   return el.querySelector(".head");
 }
 const setBoth = t => { vOff.currentTime = t; vLight.currentTime = t; };
-const headCmp = buildTimeline($("tlCmp"), true, setBoth);
-const cmpSegEls = [...$("tlCmp").querySelectorAll(".seg")];
-const headMain = buildTimeline($("tlMain"), true, t => { pauseMain(); vMain.currentTime = t; });
-const mainSegEls = [...$("tlMain").querySelectorAll(".seg")];
+let headCmp, cmpSegEls, headMain, mainSegEls;
+function rebuildTimelines() {
+  headCmp = buildTimeline($("tlCmp"), true, setBoth);
+  cmpSegEls = [...$("tlCmp").querySelectorAll(".seg")];
+  headMain = buildTimeline($("tlMain"), true, t => { pauseMain(); vMain.currentTime = t; });
+  mainSegEls = [...$("tlMain").querySelectorAll(".seg")];
+}
+rebuildTimelines();
 
 /* ---- 播放控制（状态从真实 paused 派生，不用标志位） ---- */
 const cmpIsPlaying = () => !vOff.paused || !vLight.paused;
@@ -773,14 +811,16 @@ function syncControls() {
   $("selSpeed").value = String(S.speed);
 }
 $("btnReset").addEventListener("click", () => {
-  S = {...DEFAULTS}; syncControls(); refreshSegList();
+  S = {...DEFAULTS, ...ORIENT_DEFAULTS[orient]}; syncControls(); refreshSegList();
   vOff.playbackRate = S.speed; vLight.playbackRate = S.speed;
   toast("已恢复 <b>PRD 默认参数</b>");
 });
 $("btnRandom").addEventListener("click", () => {
   const ri = (a,b) => a + Math.floor(Math.random()*(b-a+1));
   const palette = ["#ffff00","#ff4f9a","#3fd4e6","#3ddc84","#ff8a3d","#8b7bff"];
-  S = {...S, fadeMs:ri(80,150), fs:ri(38,60), chars:ri(12,16), marginV:ri(12,18), safeLR:ri(5,10),
+  const land = orient === "landscape";
+  S = {...S, fadeMs:ri(80,150), fs:ri(land?26:38, land?46:60), chars:ri(land?16:12, land?22:16),
+       marginV:ri(land?8:12, land?12:18), safeLR:ri(5,10),
        outline:[1,1.5,2,2.5,3][ri(0,4)], badgeFsPct:ri(45,65),
        hl:palette[ri(0,palette.length-1)], badgeShrink:Math.random()<0.8, badgeOn:Math.random()<0.9};
   syncControls(); refreshSegList(); toast("已随机一组参数");
@@ -849,11 +889,15 @@ function exportAss() {
 $("btnAss").addEventListener("click", exportAss);
 $("btnJson").addEventListener("click", () => {
   const tpl = {
-    orientation:"portrait",
-    chars_per_line:{portrait:[Math.max(12,S.chars-4), S.chars], landscape:[16,22]},
+    orientation: orient,
+    chars_per_line:{
+      portrait: orient === "portrait" ? [Math.max(12, S.chars-4), S.chars] : [12, 16],
+      landscape: orient === "landscape" ? [Math.max(16, S.chars-6), S.chars] : [16, 22]},
     max_lines:2,
     safe_area:{left_pct:S.safeLR, right_pct:S.safeLR, bottom_pct:S.marginV},
-    font:{name:"Microsoft YaHei", size_portrait:S.fs, size_landscape:36},
+    font:{name:"Microsoft YaHei",
+          size_portrait: orient === "portrait" ? S.fs : 48,
+          size_landscape: orient === "landscape" ? S.fs : 36},
     colors:{primary:"&H00FFFFFF", outline:"&H00000000", highlight:hexToAssStyle(S.hl)},
     effects:{fade_in_ms:S.fadeMs, highlight_max_per_segment:1,
              badge:{enabled:S.badgeOn, position:"top_right", shrink_when_speaking:S.badgeShrink}},
@@ -862,6 +906,111 @@ $("btnJson").addEventListener("click", () => {
   download("工作台_模板参数.json", JSON.stringify(tpl, null, 2), "application/json;charset=utf-8");
   toast("已导出模板 JSON · 可直接 <b>effects.py --template</b>");
 });
+
+/* ---- 导入视频 / 字幕，横竖屏自适应 ---- */
+function parseSrt(txt) {
+  const out = [];
+  const toS = s => { const m = s.match(/(\d+):(\d+):(\d+)[,.](\d{3})/); return m ? +m[1]*3600 + +m[2]*60 + +m[3] + +m[4]/1000 : NaN; };
+  for (const block of txt.replace(/\r/g, "").split(/\n{2,}/)) {
+    const lines = block.split("\n");
+    const ti = lines.findIndex(l => l.includes("-->"));
+    if (ti < 0) continue;
+    const [a, b] = lines[ti].split("-->");
+    const start = toS(a), end = toS(b);
+    const text = lines.slice(ti + 1).join(" ").replace(/<[^>]+>/g, "").trim();
+    if (!isFinite(start) || !isFinite(end) || !text) continue;
+    out.push({index: out.length + 1, start, end, text});
+  }
+  return out;
+}
+function autoChapters(segs, minS = 12) {
+  const ch = []; let acc = 0;
+  for (let i = 1; i < segs.length; i++) {
+    if (acc >= minS) { ch.push({start: segs[i].start, label: `第${ch.length + 1}节`}); acc = 0; }
+    acc += segs[i].end - segs[i].start;
+  }
+  if (ch.length) ch.unshift({start: 0, label: "开场"});
+  return ch;
+}
+function applyOrientationLayout() {
+  orient = W >= H ? "landscape" : "portrait";
+  Object.assign(S, ORIENT_DEFAULTS[orient]);
+  const root = document.documentElement.style;
+  root.setProperty("--vw", W); root.setProperty("--vh", H);
+  $("rgFs").min = orient === "portrait" ? 36 : 24;
+  $("rgFs").max = orient === "portrait" ? 64 : 48;
+  $("rgChars").min = orient === "portrait" ? 12 : 16;
+  $("rgChars").max = orient === "portrait" ? 16 : 22;
+  $("lbFs").textContent = `字号（PlayRes ${W}×${H}）`;
+  $("tagVideo").textContent = `${W}×${H} · ${DUR.toFixed(2)}s`;
+  $("durMain").textContent = $("durCmp").textContent = fmt(DUR);
+  syncControls(); refreshSegList(); rescale();
+}
+let importedUrl = null;
+$("btnImportVideo").addEventListener("click", () => $("fileVideo").click());
+$("fileVideo").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  pauseMain(); pauseCompare();
+  if (importedUrl) URL.revokeObjectURL(importedUrl);
+  importedUrl = URL.createObjectURL(f);
+  for (const v of [vMain, vOff, vLight]) { v.src = importedUrl; v.removeAttribute("poster"); }
+  cmpLive = true; $("ovCmp").style.display = "block";
+  const onMeta = () => {
+    vMain.removeEventListener("loadedmetadata", onMeta);
+    W = vMain.videoWidth || W; H = vMain.videoHeight || H;
+    DUR = (isFinite(vMain.duration) && vMain.duration > 0) ? vMain.duration
+          : (SEGMENTS[SEGMENTS.length-1] ? SEGMENTS[SEGMENTS.length-1].end : DUR);
+    $("impName").textContent = f.name;
+    applyOrientationLayout(); rebuildTimelines();
+    toast(`已导入视频 <b>${f.name}</b> · ${orient === "portrait" ? "竖屏" : "横屏"} ${W}×${H} · ${DUR.toFixed(1)}s`);
+  };
+  vMain.addEventListener("loadedmetadata", onMeta);
+  e.target.value = "";
+});
+$("btnImportSubs").addEventListener("click", () => $("fileSubs").click());
+$("fileSubs").addEventListener("change", async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const txt = await f.text();
+  let ok = false;
+  try {
+    if (/\.json$/i.test(f.name)) {
+      const j = JSON.parse(txt);
+      const segs = Array.isArray(j) ? j : j.segments;
+      if (Array.isArray(segs) && segs.length && "start" in segs[0]) {
+        SEGMENTS = segs.map((s, i) => ({index: i + 1, start: +s.start, end: +s.end, text: String(s.text || "").replace(/\n/g, " ").trim()}));
+        CHAPTERS = (!Array.isArray(j) && Array.isArray(j.chapters) && j.chapters.length) ? j.chapters : autoChapters(SEGMENTS);
+        ok = SEGMENTS.length > 0;
+      }
+    } else {
+      const segs = parseSrt(txt);
+      if (segs.length) { SEGMENTS = segs; CHAPTERS = autoChapters(SEGMENTS); ok = true; }
+    }
+  } catch (_) {}
+  if (!ok) toast("字幕解析失败：请提供 SRT 或 segments JSON");
+  else {
+    if (!cmpLive && SEGMENTS.length) DUR = Math.max(DUR, SEGMENTS[SEGMENTS.length-1].end);
+    $("impName").textContent = f.name;
+    buildSegList(); rebuildTimelines(); rescale();
+    toast(`已导入字幕 <b>${f.name}</b> · ${SEGMENTS.length} 条 / ${CHAPTERS.length} 节`);
+  }
+  e.target.value = "";
+});
+$("btnLoadSample").addEventListener("click", () => {
+  pauseMain(); pauseCompare();
+  if (importedUrl) { URL.revokeObjectURL(importedUrl); importedUrl = null; }
+  vMain.src = SAMPLE_SRC.vMain; vOff.src = SAMPLE_SRC.vOff; vLight.src = SAMPLE_SRC.vLight;
+  vMain.poster = "社团项目/d_output/poster_clean.jpg";
+  vOff.poster = "社团项目/d_output/poster_noeffects.jpg";
+  vLight.poster = "社团项目/d_output/poster_light.jpg";
+  SEGMENTS = SAMPLE_SEGMENTS; CHAPTERS = SAMPLE_CHAPTERS;
+  W = 1080; H = 1920; DUR = 46.266667; cmpLive = false;
+  $("ovCmp").style.display = "none";
+  $("impName").textContent = "内置示例片";
+  applyOrientationLayout(); rebuildTimelines(); buildSegList();
+  toast("已恢复 <b>内置示例片</b>");
+});
+window.__state = () => ({W, H, dur: Math.round(DUR*100)/100, orient, cmpLive,
+                         segs: SEGMENTS.length, chaps: CHAPTERS.length, fs: S.fs, chars: S.chars});
 
 /* ---- toast ---- */
 let toastTimer = 0;
@@ -887,6 +1036,7 @@ function tick() {
   const segIdx = seg ? seg.index : -1;
   for (const d of cmpSegEls) d.classList.toggle("act", +d.dataset.idx === segIdx);
   $("cmpCur").textContent = fmt(t);
+  if (cmpLive) { ovCmpLight.render(seg, t); ovCmpLight.badge(t); }
   if (playing) {
     const drift = Math.abs(vOff.currentTime - vLight.currentTime);
     if (drift > 0.08) vLight.currentTime = vOff.currentTime;
@@ -903,8 +1053,8 @@ function tick() {
   }
   const tm = vMain.currentTime || 0;
   const segM = segAt(tm);
-  renderSubtitle(segM, tm);
-  renderBadge(tm);
+  ovStage.render(segM, tm);
+  ovStage.badge(tm);
   $("ovTime").textContent = fmt(tm);
   $("tCur").textContent = fmt(tm);
   headMain.style.left = (tm/DUR*100) + "%";
@@ -937,8 +1087,9 @@ buildSegList();
 syncControls();
 rescale();
 new ResizeObserver(rescale).observe(stageWrap);
-renderSubtitle(segAt(0), 0);
-renderBadge(0);
+new ResizeObserver(rescale).observe(cmpLightWrap);
+ovStage.render(segAt(0), 0);
+ovStage.badge(0);
 requestAnimationFrame(tick);
 </script>
 </body>

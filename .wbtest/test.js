@@ -1,6 +1,8 @@
 const puppeteer = require("puppeteer-core");
 const fs = require("fs");
 const path = require("path");
+const http = require("http");
+const { spawn } = require("child_process");
 
 const ROOT = path.resolve(__dirname, "..");
 const URL = "file:///" + path.join(ROOT, "动效工作台.html").split(path.sep).join("/");
@@ -9,18 +11,36 @@ const OUT = __dirname;
 const results = [];
 const ok = (name, cond, extra) => results.push({ name, pass: !!cond, extra: extra === undefined ? null : extra });
 
+// Edge 后台常驻进程会接管 puppeteer 的启动握手，改为手动 spawn 无头实例再 connect
+const PORT = 9400 + (Date.now() % 400);
+const UDD = path.join(process.env.TEMP || OUT, "wbtest_profile_" + Date.now());
+let edgeProc = spawn(EDGE, [
+  "--headless=new", `--user-data-dir=${UDD}`, "--no-sandbox",
+  "--allow-file-access-from-files", "--autoplay-policy=no-user-gesture-required",
+  "--mute-audio", `--remote-debugging-port=${PORT}`, "about:blank",
+], { stdio: "ignore" });
+process.on("exit", () => { try { edgeProc.kill(); } catch (_) {} });
+async function waitBrowser() {
+  for (let i = 0; i < 120; i++) {
+    try {
+      const j = await new Promise((res, rej) =>
+        http.get(`http://127.0.0.1:${PORT}/json/version`, r => { let d = ""; r.on("data", c => d += c); r.on("end", () => res(JSON.parse(d))); }).on("error", rej));
+      return j;
+    } catch (_) { await new Promise(r => setTimeout(r, 250)); }
+  }
+  throw new Error("headless Edge 未能在调试端口启动");
+}
+
 (async () => {
-  const browser = await puppeteer.launch({
-    executablePath: EDGE, headless: "new",
-    args: ["--no-sandbox", "--allow-file-access-from-files", "--autoplay-policy=no-user-gesture-required", "--mute-audio"],
-  });
+  const info = await waitBrowser();
+  const browser = await puppeteer.connect({ browserWSEndpoint: info.webSocketDebuggerUrl });
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", e => errors.push("pageerror: " + e.message));
   page.on("console", m => { if (m.type() === "error") errors.push("console: " + m.text()); });
   page.on("requestfailed", r => {
     const u = r.url(), err = (r.failure() || {}).errorText || "";
-    if (u.endsWith(".mp4") && err.includes("ERR_ABORTED")) return;
+    if ((err.includes("ERR_ABORTED")) && (u.endsWith(".mp4") || u.startsWith("blob:"))) return;
     errors.push("reqfail: " + u.split("/").pop() + " " + err);
   });
   await page.setViewport({ width: 1440, height: 900 });
@@ -267,6 +287,52 @@ const ok = (name, cond, extra) => results.push({ name, pass: !!cond, extra: extr
   const I1 = await page.evaluate(() => [document.getElementById("vOff"), document.getElementById("vLight")].filter(v => !v.paused).length);
   ok("I 交替播放状态一致", I1 === 0 || I1 === 2, I1);
   await page.evaluate(() => { document.getElementById("vOff").pause(); document.getElementById("vLight").pause(); });
+
+  // ---- J 导入视频/字幕 + 横竖屏自适应 ----
+  const pv = path.join(ROOT, "社团项目", "微信视频2026-11-21_213120_116_cut.mp4");
+  await (await page.$("#fileVideo")).uploadFile(pv);
+  await page.waitForFunction("window.__state().cmpLive && window.__state().W===720", { timeout: 20000 });
+  const J1 = await page.evaluate(() => window.__state());
+  ok("J 导入竖屏视频→objectURL 接管三播放器并读出真实分辨率/时长", J1.cmpLive && J1.orient === "portrait" && J1.W === 720 && J1.H === 1280 && Math.abs(J1.dur - 46.27) < 0.5, J1);
+  await page.evaluate(() => { document.getElementById("vOff").currentTime = 14.5; });
+  await new Promise(r => setTimeout(r, 400));
+  const J2 = await page.evaluate(() => ({
+    shown: getComputedStyle(document.getElementById("ovCmp")).display !== "none",
+    txt: document.getElementById("ovCmpSub").textContent.trim(),
+    hl: document.querySelector("#ovCmpSub .hl")?.textContent,
+    badge: document.getElementById("ovCmpBadge").textContent,
+  }));
+  ok("J 导入后对照轻动效格用叠加模拟字幕/高亮/角标", J2.shown && J2.txt.includes("比如说") && J2.hl === "ASR" && J2.badge.includes("第2节"), J2);
+  await page.evaluate(() => { document.getElementById("vOff").pause(); document.getElementById("vLight").pause(); });
+
+  const lv = path.join(ROOT, "videocut", "demo_output", "test_landscape.mp4");
+  await (await page.$("#fileVideo")).uploadFile(lv);
+  await page.waitForFunction("window.__state().orient==='landscape'", { timeout: 20000 });
+  const J3 = await page.evaluate(() => Object.assign(window.__state(), {
+    ar: getComputedStyle(document.getElementById("stageWrap")).aspectRatio,
+    fsMax: document.getElementById("rgFs").max,
+    badgeTop: document.getElementById("ovBadge").style.top,
+  }));
+  ok("J 横屏视频→landscape/16:9 舞台/滑杆范围 24-48/字号默认 36", J3.W === 1920 && J3.H === 1080 && J3.fsMax === "48" && J3.fs === 36 && J3.chars === 22 && J3.ar.replace(/\s/g, "") === "1920/1080", J3);
+
+  const lsSrt = path.join(OUT, "landscape.srt");
+  fs.writeFileSync(lsSrt, "1\n00:00:00,500 --> 00:00:03,000\n大家好，欢迎来到我的频道。\n\n2\n00:00:03,200 --> 00:00:06,000\n今天聊聊 FunASR 的用法。\n\n3\n00:00:06,500 --> 00:00:09,000\n这个功能提升了 30% 的效率。\n\n4\n00:00:09,200 --> 00:00:11,500\n我们下期再见。\n");
+  await (await page.$("#fileSubs")).uploadFile(lsSrt);
+  await page.waitForFunction("window.__state().segs===4", { timeout: 10000 });
+  const J4 = await page.evaluate(() => ({
+    rows: document.getElementById("segList").children.length,
+    st: window.__state(),
+    sub: document.getElementById("segList").children[1].querySelector(".x").textContent,
+    hl: document.getElementById("segList").children[1].querySelector(".x .hl")?.textContent,
+  }));
+  ok("J 导入横屏 SRT→4 条解析/高亮选词/段落表重建", J4.rows === 4 && J4.st.chaps === 0 && J4.sub.includes("FunASR") && J4.hl === "FunASR", { rows: J4.rows, chaps: J4.st.chaps, hl: J4.hl });
+  await page.screenshot({ path: path.join(OUT, "shot_landscape_import.png") });
+
+  await page.click("#btnLoadSample");
+  await page.waitForFunction("!window.__state().cmpLive && window.__state().segs===24", { timeout: 10000 });
+  const J5 = await page.evaluate(() => window.__state());
+  ok("J 恢复示例→竖屏 24 条 / DUR 46.27 / 模拟叠加关闭", J5.orient === "portrait" && Math.abs(J5.dur - 46.27) < 0.01 && !J5.cmpLive && J5.W === 1080, J5);
+  await page.evaluate(() => { const el = document.getElementById("swEffects"); el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true })); });
 
   ok("Z console/page/请求 零错误", errors.length === 0, errors.slice(0, 8));
   await browser.close();
