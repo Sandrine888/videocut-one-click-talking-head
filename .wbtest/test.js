@@ -312,8 +312,12 @@ async function waitBrowser() {
     ar: getComputedStyle(document.getElementById("stageWrap")).aspectRatio,
     fsMax: document.getElementById("rgFs").max,
     badgeTop: document.getElementById("ovBadge").style.top,
+    land: document.body.classList.contains("land"),
+    swW: document.getElementById("stageWrap").getBoundingClientRect().width,
+    swH: document.getElementById("stageWrap").getBoundingClientRect().height,
   }));
   ok("J 横屏视频→landscape/16:9 舞台/滑杆范围 24-48/字号默认 36", J3.W === 1920 && J3.H === 1080 && J3.fsMax === "48" && J3.fs === 36 && J3.chars === 22 && J3.ar.replace(/\s/g, "") === "1920/1080", J3);
+  ok("J 横屏预览区横跨整行放大(宽>600且高>340)", J3.land && J3.swW > 600 && J3.swH > 340, { swW: Math.round(J3.swW), swH: Math.round(J3.swH) });
 
   const lsSrt = path.join(OUT, "landscape.srt");
   fs.writeFileSync(lsSrt, "1\n00:00:00,500 --> 00:00:03,000\n大家好，欢迎来到我的频道。\n\n2\n00:00:03,200 --> 00:00:06,000\n今天聊聊 FunASR 的用法。\n\n3\n00:00:06,500 --> 00:00:09,000\n这个功能提升了 30% 的效率。\n\n4\n00:00:09,200 --> 00:00:11,500\n我们下期再见。\n");

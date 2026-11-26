@@ -239,6 +239,15 @@ footer b{color:var(--amber-deep)}
   .cmp-grid{grid-template-columns:1fr 1fr}
   .cmp-grid .card:last-child{grid-column:1 / -1}
 }
+/* 横屏模式：预览卡横跨整行放大，参数台/段落表第二行并排 */
+body.land #stageCard{grid-column:1 / -1; position:static}
+body.land #stageCard .stage-wrap{width:min(100%, calc((100vh - 300px) * var(--vw,1080) / var(--vh,1920)))}
+@media (min-width:1181px){
+  body.land #tune{grid-template-columns:minmax(300px,380px) minmax(280px,1fr)}
+}
+@media (min-width:821px) and (max-width:1180px){
+  body.land #tune{grid-template-columns:minmax(280px,1fr) minmax(280px,1fr)}
+}
 @media (max-width:820px){
   nav{display:none}
   #tune{grid-template-columns:1fr}
@@ -935,6 +944,7 @@ function autoChapters(segs, minS = 12) {
 function applyOrientationLayout() {
   orient = W >= H ? "landscape" : "portrait";
   Object.assign(S, ORIENT_DEFAULTS[orient]);
+  document.body.classList.toggle("land", orient === "landscape");
   const root = document.documentElement.style;
   root.setProperty("--vw", W); root.setProperty("--vh", H);
   $("rgFs").min = orient === "portrait" ? 36 : 24;
