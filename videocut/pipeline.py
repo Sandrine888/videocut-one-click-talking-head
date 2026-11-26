@@ -15,6 +15,7 @@ import uuid
 
 from .media import check_tools, inspect_media, render_video, verified_silences
 from .transcribe import transcribe_with_cache
+from .subtitle_style import load_template
 
 STAGES = ("识别", "字幕", "动效", "导出")
 
@@ -119,7 +120,7 @@ def generate(options, *, adapters=None, on_event=None, task_id=None):
     stage, started, stage_started = "校验", time.monotonic(), time.monotonic()
     timings = {}
     warnings = []
-    integration = {"A": bool(options.template or adapters.template_loader),
+    integration = {"A": True,
                    "C": bool(adapters.subtitle_builder),
                    "D": bool(adapters.effect_builder), "E": bool(adapters.verifier)}
     events = []
@@ -155,9 +156,10 @@ def generate(options, *, adapters=None, on_event=None, task_id=None):
         elif adapters.template_loader:
             template = adapters.template_loader()
         else:
-            template = {"name": "现有字幕样式 联调版本"}
+            template = {}
         if not isinstance(template, dict):
             raise ValueError("模板配置必须是一个对象。")
+        template = load_template(template)
         write_json(task_dir / "effective_config.json",
                    dict(options=asdict(options), template=template, integration=integration))
         write_json(task_dir / "input_media.json", media)
@@ -245,17 +247,19 @@ def generate(options, *, adapters=None, on_event=None, task_id=None):
         emit("字幕", "completed", f"字幕已生成，共 {len(segments)} 条。")
 
         emit("动效", "running", "正在准备字幕渲染。")
+        layout_report = None
         if adapters.effect_builder:
             asset = Path(adapters.effect_builder(segments, template, task_dir, media)).resolve()
             if asset.suffix.lower() not in {".srt", ".ass"} or not asset.is_file():
                 raise ValueError("动效模块没有提供有效的 ASS 或 SRT 渲染文件。")
         else:
-            asset = srt_path
+            from .output.styled import prepare_subtitles
+            asset, layout_report = prepare_subtitles(segments, template, task_dir, media)
         missing = [name for name, connected in integration.items() if not connected]
         if missing:
             warnings.append("联调版本：" + "、".join(missing) + " 模块尚未正式接入，未通过全队成片验收。")
         emit("动效", "completed", "动效文件已准备。" if adapters.effect_builder
-             else "动效模块尚未接入，本次仅导出现有静态字幕联调版。")
+             else "已准备 A 的静态字幕排版，动效模块尚未接入。")
 
         emit("导出", "running", "正在渲染视频，完成后检查输出文件。")
         final_path = task_dir / "final.mp4"
@@ -274,6 +278,7 @@ def generate(options, *, adapters=None, on_event=None, task_id=None):
                       mode=options.mode, suggestions=suggestions, applied_ids=[r['id'] for r in chosen],
                       action=('quick' if options.mode == 'quick' else 'apply' if options.auto_apply or options.review_task else 'review'),
                       task_dir=str(task_dir), video=str(final_path), srt=str(srt_path),
+                      subtitle_asset=str(asset), layout_report=str(layout_report) if layout_report else None,
                       subtitles=str(task_dir / "subtitles.json"), input_media=media,
                       output_media=output_media, trim_silence=options.trim_silence,
                       deletions=deleted, cache_hit=cache_hit, integration=integration,
@@ -283,6 +288,8 @@ def generate(options, *, adapters=None, on_event=None, task_id=None):
         checks = [{"category": name, "status": "not_tested"} for name in
                   ("字幕准确", "断句与标点", "同步与时间轴", "视觉与动效", "输出完整", "速度与可靠性")]
         checks[4].update(status="partial", message="B 已核验编码、画幅、时长与文件；独立播放和 SRT 视觉对照待 E 核验。")
+        if layout_report:
+            checks[3].update(status="partial", message="已检查 A 字幕的行数和估算宽度；实际画面、遮挡和动效仍待核验。")
         report = {"owner": "B 联调基础检查，尚非 E 正式自检", "checks": checks}
         if adapters.verifier:
             try:

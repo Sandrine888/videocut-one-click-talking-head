@@ -4,7 +4,7 @@
 
 Windows 双击仓库根目录的“打开口播工具.bat”。选择视频，点击生成，在页面预览并保存 MP4 和 SRT。默认保留全部内容。
 
-当前提供供团队接入的试运行页面，用于验证 B 的任务接口；E 可以替换页面并接入正式的预览、下载和自检。缺少 A、C、D、E 的适配器时，程序沿用已有静态字幕并标记联调版本，不代表完整成片验收通过。
+当前提供供团队接入的试运行页面，用于验证 B 的任务接口；E 可以替换页面并接入正式的预览、下载和自检。A 的模板和静态排版已默认接入，C、D、E 的正式适配器仍待接入；当前标记联调版本，不代表完整成片验收通过。
 
 需要 Python 3.11、项目依赖和 FFmpeg / FFprobe；FFmpeg 包含 libass、libx264 和 AAC。默认 FunASR 模型已缓存时直接从本地加载，新入口在模型未准备时提示复制离线模型到 `models/paraformer-zh/`。新机器可创建 .venv 环境，再在该环境执行 python -m pip install -e .。快剪不调用 init、License 校验或外部模型。进阶版通过本机页面保存模型配置后可分析转写内容。已有 cut 保持交互式兼容行为。
 
@@ -30,6 +30,7 @@ Windows 双击仓库根目录的“打开口播工具.bat”。选择视频，�
 
 - final.mp4：烧录字幕的 H.264 / AAC 视频。
 - subtitles.srt 与 subtitles.json：同一份最终字幕条目。
+- subtitles.ass 与 layout.json：使用默认静态渲染时，A 输出的排版文件和逐条行数、估算宽度检查；不能代替人工视觉检查。
 - transcript.json、mapped_transcript.json：原始和映射后的识别结果。
 - deletions.json：删段区间，默认空列表。
 - effective_config.json、input_media.json：有效参数和媒体信息。
@@ -59,6 +60,8 @@ GenerateOptions 包括 video、output_dir、trim_silence、template、model_name
 | C | subtitle_builder(transcript, template) | SubtitleSegment 列表，字段 index/start/end/text，单位秒 |
 | D | effect_builder(segments, template, task_dir, media) | 已存在的 ASS 或 SRT 路径 |
 | E | verifier(result_manifest) | JSON 报告 dict，含六类 checks |
+
+未提供 `template_loader` 时读取 A 的 `template_defaults.json`；自定义模板的缺省值从这份默认配置补齐并保存。未提供 D 的 `effect_builder` 时，使用 `output.styled.prepare_subtitles` 生成静态 ASS，视频仍由 B 单次编码。旧 `output.local` 保留字幕生成与旧 `cut` 的兼容接口；A 的独立 SRT 烧录入口移至 `python -m videocut.output.styled`。
 
 识别沿用 TranscriptResult(video_file, full_text, duration, chars)，逐字项 CharTimestamp(char, start, end)。C 收到的是实际剪辑映射后的结果，不重复映射。
 
@@ -104,4 +107,12 @@ B 自动检查媒体结构、编码、尺寸、预期时长和基本字幕数据
 
 运行证据位于 results/b-validation/http_smoke.json；网页两次任务结果分别位于 .videocut-work/results/8cc26f95dc7741c582b193ef1750787c/ 和 .videocut-work/results/e1f17146f85041efb39cc7a3fa728410/。
 
-剩余依赖：A 的正式模板、C 的语义字幕、D 的基础动效、E 的正式页面与自检；提供对应适配器后继续联调。新真人原片和环形互检仍待完成。
+剩余依赖：C 的语义字幕、D 的基础动效、E 的正式页面与自检；提供对应适配器后继续联调。A 的模板和静态排版已在后续 A+B 合并中接入。新真人原片和环形互检仍待完成。
+
+## A+B 合并验证（2026年11月26日）
+
+- B 的快剪和进阶版均保留。A 的静态排版放入 `output/styled.py`，旧 `output/local.py` 的字幕生成和旧剪辑接口保留。
+- 83 项自动测试通过，包含 A 的独立烧录、B 的两种模式和三项新增接口联调检查。已核对秒到毫秒的转换、字幕原文一致性、模板覆盖及排版失败时保留诊断并阻止导出。
+- 安装包构建成功，已检查 wheel 同时包含网页、默认模板、A 的样式模块和 B 的输出模块。PyInstaller 配置也同时保留网页和模板；本次未重新构建 Windows 可执行文件。
+- 26.631125 秒合成演示片复用已有本地转写，完成 A 排版和单次视频导出；成片 26.632 秒，8 条字幕排版检查通过，音视频完整解码。禁用 Python 网络连接的检查未记录到连接尝试。
+- 本次未合并 D 分支，不代表正式动效、语义字幕或完整人工质量验收通过。

@@ -41,7 +41,10 @@ a = Analysis(
     ['videocut_entry.py'],
     pathex=[],
     binaries=[],
-    datas=funasr_datas + modelscope_datas + funasr_src_datas,
+    datas=funasr_datas + modelscope_datas + funasr_src_datas + [
+        (os.path.join(SPECPATH, 'videocut', 'template_defaults.json'), 'videocut'),
+        (os.path.join(SPECPATH, 'videocut', 'webui'), 'videocut/webui'),
+    ],
     hiddenimports=[
         'videocut',
         *videocut_hidden,

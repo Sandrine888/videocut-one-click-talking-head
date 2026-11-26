@@ -62,7 +62,7 @@ where = ["."]
 include = ["videocut*"]
 
 [tool.setuptools.package-data]
-videocut = ["webui/*.html"]
+videocut = ["webui/*.html", "template_defaults.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

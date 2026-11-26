@@ -1,5 +1,1 @@
-"""
-输出模块
-
-支持本地输出和剪映输出
-"""
+"""Local subtitle generation, styled rendering, and Jianying output adapters."""
