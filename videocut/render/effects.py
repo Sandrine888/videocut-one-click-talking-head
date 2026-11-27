@@ -8,6 +8,30 @@
 
 边界：只读 A 的模板配置；不改 C 的断句文本；不碰 B/E 的文件。
 独立运行：python -m videocut.render.effects --demo
+
+跨模块接口契约（与 A/B/C/E 配对用，详见 docs/D模块_接口契约.md）
+------------------------------------------------------------------
+输入（均为 JSON 可序列化对象；时间单位：字幕/章节一律「秒(float, s)」，淡入「毫秒(int, ms)」）：
+  segments : List[Dict]  必填。C 的字幕片段，每条字段：
+      index : int   可选，缺省按 1 起序号补齐
+      start : float 必填，秒，>= 0
+      end   : float 必填，秒，> start
+      text  : str   必填，非空；C 断句后的最终文本，D 不改内容
+  template : Dict | str 必填。A 的模板配置 dict 或 JSON 文件路径；
+      缺字段自动用 DEFAULT_TEMPLATE 补齐；effects.fade_in_ms 单位 ms，越界钳制 80–150
+  chapters : List[Dict] | None 可选。章节切换点，每条字段：
+      start : float 必填，秒，>= 0，整体按 start 单调递增
+      label : str   必填，非空；None/[] 表示不加角标
+  video    : str | Path 必填（仅 render / render_pair / burn）。原片路径，须存在。
+输出：
+  render_ass(segments, template, chapters, ...) -> str   ASS 字幕文件路径
+  render(video, segments, template, chapters, ...) -> RenderResult
+      字段：orientation / ass_light / ass_noeffects / mp4_light / mp4_noeffects
+            / report_path / checks（挡脸/贴边/超两行违规计数），可 .to_dict()
+错误处理（全部继承 EffectsError；CLI 退出码 2）：
+  InputError  (ValueError)  字段缺失/类型错/时间非法/配置非法
+  MediaError  (RuntimeError) 视频不存在、ffprobe 读不出分辨率或时长
+  RenderError (RuntimeError) ffmpeg 烧录失败（消息含 stderr 尾部）
 """
 
 from __future__ import annotations
@@ -19,10 +43,91 @@ import os
 import re
 import subprocess
 import sys
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import pysubs2
+
+
+# ---------------------------------------------------------------------------
+# 0. 接口错误类型（跨模块配对用，见模块 docstring 契约）
+# ---------------------------------------------------------------------------
+
+class EffectsError(Exception):
+    """D 模块错误基类。"""
+
+
+class InputError(EffectsError, ValueError):
+    """输入字段缺失、类型错误、时间非法（start>=end、负数、空列表）、配置非法。"""
+
+
+class MediaError(EffectsError, RuntimeError):
+    """视频文件不存在，或 ffprobe 读不出分辨率/时长。"""
+
+
+class RenderError(EffectsError, RuntimeError):
+    """ffmpeg 烧录失败、ASS 落盘失败（消息含 stderr 尾部）。"""
+
+
+def _num(value, name: str, where: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise InputError(f"{where} 的 {name} 必须是数字（秒），收到 {type(value).__name__}: {value!r}")
+    return float(value)
+
+
+def validate_segments(segments) -> List[Dict]:
+    """校验并规范化 segments（补 index、时间转 float 秒）。非法时抛 InputError。"""
+    if not isinstance(segments, (list, tuple)) or not segments:
+        raise InputError("segments 必须是非空列表")
+    out: List[Dict] = []
+    for i, seg in enumerate(segments, 1):
+        where = f"segments[{i - 1}]"
+        if not isinstance(seg, dict):
+            raise InputError(f"{where} 必须是对象(dict)，收到 {type(seg).__name__}")
+        for key in ("start", "end", "text"):
+            if key not in seg:
+                raise InputError(f"{where} 缺少必填字段 {key!r}")
+        start = _num(seg["start"], "start", where)
+        end = _num(seg["end"], "end", where)
+        if start < 0:
+            raise InputError(f"{where}.start 不能为负: {start}")
+        if end <= start:
+            raise InputError(f"{where} 需要 end > start，收到 start={start} end={end}")
+        if not isinstance(seg["text"], str) or not seg["text"].strip():
+            raise InputError(f"{where}.text 必须是非空字符串")
+        index = seg.get("index", i)
+        if not isinstance(index, int) or isinstance(index, bool):
+            raise InputError(f"{where}.index 必须是整数，收到 {index!r}")
+        out.append({"index": index, "start": start, "end": end, "text": seg["text"].strip()})
+    return out
+
+
+def validate_chapters(chapters) -> List[Dict]:
+    """校验并规范化 chapters（None/[] 合法=不加角标）。非法时抛 InputError。"""
+    if chapters is None:
+        return []
+    if not isinstance(chapters, (list, tuple)):
+        raise InputError(f"chapters 必须是列表或 None，收到 {type(chapters).__name__}")
+    out: List[Dict] = []
+    for i, ch in enumerate(chapters):
+        where = f"chapters[{i}]"
+        if not isinstance(ch, dict):
+            raise InputError(f"{where} 必须是对象(dict)，收到 {type(ch).__name__}")
+        for key in ("start", "label"):
+            if key not in ch:
+                raise InputError(f"{where} 缺少必填字段 {key!r}")
+        start = _num(ch["start"], "start", where)
+        if start < 0:
+            raise InputError(f"{where}.start 不能为负: {start}")
+        if not isinstance(ch["label"], str) or not ch["label"].strip():
+            raise InputError(f"{where}.label 必须是非空字符串")
+        out.append({"start": start, "label": ch["label"].strip()})
+    for a, b in zip(out, out[1:]):
+        if b["start"] <= a["start"]:
+            raise InputError(f"chapters 必须按 start 严格递增: {a['start']} -> {b['start']}")
+    return out
+
 
 # ---------------------------------------------------------------------------
 # 默认数据（PRD 3.1：v1 用自造样例，字段约定即内部接口）
@@ -84,22 +189,41 @@ def _deep_merge(base: Dict, override: Dict) -> Dict:
     return out
 
 
-def load_template(path: Optional[str] = None) -> Dict:
-    """读配置、校验区间、缺字段用默认值补齐。fade_in_ms 越界钳制到 80–150。"""
-    user = {}
-    if path:
-        with open(path, "r", encoding="utf-8") as f:
-            user = json.load(f)
+def load_template(path: Optional[Union[str, Dict]] = None) -> Dict:
+    """读配置、校验区间、缺字段用默认值补齐。fade_in_ms 越界钳制到 80–150。
+
+    参数可为 JSON 文件路径、已解析的 dict，或 None（全默认）。
+    配置非法时抛 InputError。
+    """
+    user: Dict = {}
+    if isinstance(path, dict):
+        user = copy.deepcopy(path)
+    elif path:
+        p = Path(path)
+        if not p.exists():
+            raise InputError(f"模板配置 JSON 文件不存在: {path}")
+        try:
+            user = json.loads(p.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            raise InputError(f"模板配置 JSON 解析失败: {path}: {e}") from e
+        if not isinstance(user, dict):
+            raise InputError(f"模板配置必须是 JSON 对象，收到 {type(user).__name__}")
     tpl = _deep_merge(DEFAULT_TEMPLATE, user)
 
+    if not isinstance(tpl["orientation"], str) or tpl["orientation"] not in PLAY_RES:
+        raise InputError(f"orientation 必须是 portrait/landscape，收到 {tpl['orientation']!r}")
     fade = tpl["effects"]["fade_in_ms"]
+    if isinstance(fade, bool) or not isinstance(fade, (int, float)):
+        raise InputError(f"effects.fade_in_ms 必须是毫秒数(int, ms)，收到 {fade!r}")
     if not (FADE_MIN_MS <= fade <= FADE_MAX_MS):
         clamped = max(FADE_MIN_MS, min(FADE_MAX_MS, fade))
         print(f"[effects] 警告: fade_in_ms={fade} 越界，钳制为 {clamped}")
-        tpl["effects"]["fade_in_ms"] = clamped
-
-    if tpl["orientation"] not in PLAY_RES:
-        raise ValueError(f"orientation 必须是 portrait/landscape，收到 {tpl['orientation']}")
+        tpl["effects"]["fade_in_ms"] = int(clamped)
+    for orient in ("portrait", "landscape"):
+        cpl = tpl["chars_per_line"].get(orient)
+        if not (isinstance(cpl, list) and len(cpl) == 2
+                and all(isinstance(v, int) and not isinstance(v, bool) for v in cpl)):
+            raise InputError(f"chars_per_line.{orient} 必须是 2 个整数的列表，收到 {cpl!r}")
     return tpl
 
 
@@ -166,7 +290,14 @@ def build_ass(
     chapters: Optional[List[Dict]] = None,
     effects_on: bool = True,
 ) -> pysubs2.SSAFile:
-    chapters = chapters or []
+    """核心：同一份输入，effects_on 开关决定有无特效标签。
+
+    输入校验见模块 docstring 契约；非法输入抛 InputError。
+    """
+    segments = validate_segments(segments)
+    chapters = validate_chapters(chapters)
+    if not isinstance(template, dict):
+        raise InputError(f"template 必须是 dict（可先经 load_template 补齐），收到 {type(template).__name__}")
     orient = template["orientation"]
     w, h = PLAY_RES[orient]
     fs = template["font"]["size_portrait" if orient == "portrait" else "size_landscape"]
@@ -197,7 +328,7 @@ def build_ass(
         borderstyle=1,
         outline=2,
         shadow=0,
-        alignment=2,  # 底部居中
+        alignment=pysubs2.Alignment.BOTTOM_CENTER,  # 底部居中
         marginl=margin_lr,
         marginr=margin_lr,
         marginv=margin_v,
@@ -255,7 +386,7 @@ def build_ass(
             borderstyle=1,
             outline=2,
             shadow=0,
-            alignment=9,  # 右上锚点
+            alignment=pysubs2.Alignment.TOP_RIGHT,  # 右上锚点
             marginl=margin_lr,
             marginr=margin_lr,
             marginv=badge_margin_top,
@@ -298,6 +429,11 @@ def _escape_filter_path(path: str) -> str:
 
 
 def burn(video: str, ass_path: str, out_path: str) -> bool:
+    """ffmpeg + libass 单次烧录，-c:a copy 不改时长。失败抛 RenderError（含 stderr 尾部）。"""
+    if not Path(video).exists():
+        raise MediaError(f"视频文件不存在: {video}")
+    if not Path(ass_path).exists():
+        raise InputError(f"ASS 字幕文件不存在: {ass_path}")
     vf = "ass='%s'" % _escape_filter_path(ass_path)
     cmd = [
         "ffmpeg", "-y", "-i", str(video),
@@ -309,8 +445,7 @@ def burn(video: str, ass_path: str, out_path: str) -> bool:
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if result.returncode != 0:
-        print("[effects] FFmpeg 错误:\n" + result.stderr[-800:])
-        return False
+        raise RenderError(f"FFmpeg 烧录失败 (exit {result.returncode}): {result.stderr[-800:]}")
     return True
 
 
@@ -325,6 +460,9 @@ def render_pair(
     chapters: Optional[List[Dict]],
     out_dir: str,
 ) -> Dict:
+    """一键出「无动效/轻动效」两版成片 + 两份 ASS。返回 {"noeffects": {...}, "light": {...}}。"""
+    if not Path(video).exists():
+        raise MediaError(f"视频文件不存在: {video}")
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     stem = Path(video).stem
@@ -333,12 +471,108 @@ def render_pair(
         ass_path = out / f"{stem}_{key}.ass"
         mp4_path = out / f"{stem}_{key}.mp4"
         subs = build_ass(segments, template, chapters, effects_on=effects_on)
-        subs.save(str(ass_path), encoding="utf-8")
-        ok = burn(video, str(ass_path), str(mp4_path))
-        if not ok:
-            raise RuntimeError(f"烧录失败: {mp4_path}")
+        try:
+            subs.save(str(ass_path), encoding="utf-8")
+        except OSError as e:
+            raise RenderError(f"ASS 写入失败: {ass_path}: {e}") from e
+        burn(video, str(ass_path), str(mp4_path))
         paths[key] = {"ass": str(ass_path), "mp4": str(mp4_path)}
     return paths
+
+
+# ---------------------------------------------------------------------------
+# 5b. 跨模块配对入口（接口契约，见模块 docstring 与 docs/D模块_接口契约.md）
+# ---------------------------------------------------------------------------
+
+def render_ass(
+    segments: List[Dict],
+    template: Union[str, Dict, None] = None,
+    chapters: Optional[List[Dict]] = None,
+    out_path: Optional[str] = None,
+    effects_on: bool = True,
+) -> str:
+    """只生成 ASS 字幕、不碰视频。返回 ASS 文件路径（str）。
+
+    template 可为 None（全默认）、dict 或 JSON 路径；非法输入抛 InputError，
+    落盘失败抛 RenderError。
+    """
+    tpl = load_template(template)
+    subs = build_ass(segments, tpl, chapters, effects_on=effects_on)
+    if out_path is None:
+        name = "light.ass" if effects_on else "noeffects.ass"
+        out_path = str(Path("effects_output") / name)
+    p = Path(out_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        subs.save(str(p), encoding="utf-8")
+    except OSError as e:
+        raise RenderError(f"ASS 写入失败: {p}: {e}") from e
+    return str(p)
+
+
+@dataclass
+class RenderResult:
+    """render() 的渲染结果对象（字段全部可 JSON 序列化）。"""
+
+    orientation: str                      # portrait / landscape
+    video: str                            # 输入原片路径
+    ass_light: str                        # 轻动效 ASS 路径
+    ass_noeffects: str                    # 无动效 ASS 路径
+    mp4_light: str                        # 轻动效成片路径
+    mp4_noeffects: str                    # 无动效成片路径
+    report_path: Optional[str] = None     # 自检报告 JSON（run_check=False 时为 None）
+    checks: Dict[str, int] = field(default_factory=dict)  # face_block/edge_touch/over_two_lines 违规数
+
+    @property
+    def ok(self) -> bool:
+        return not any(self.checks.values())
+
+    def to_dict(self) -> Dict:
+        return asdict(self)
+
+
+def render(
+    video: str,
+    segments: List[Dict],
+    template: Union[str, Dict, None] = None,
+    chapters: Optional[List[Dict]] = None,
+    out_dir: str = "effects_output",
+    orientation: str = "auto",
+    run_check: bool = True,
+) -> RenderResult:
+    """顶层配对入口：视频路径 + segments/template/chapters -> RenderResult。
+
+    orientation="auto" 时按视频宽高判定并覆盖 template.orientation。
+    错误：InputError（输入非法）/ MediaError（视频缺失或读不出分辨率）/
+    RenderError（烧录、落盘失败）。
+    """
+    if orientation not in ("auto", "portrait", "landscape"):
+        raise InputError(f"orientation 必须是 auto/portrait/landscape，收到 {orientation!r}")
+    if not Path(video).exists():
+        raise MediaError(f"视频文件不存在: {video}")
+    tpl = load_template(template)
+    if orientation == "auto":
+        tpl["orientation"] = detect_orientation(video)
+    elif orientation in ("portrait", "landscape"):
+        tpl["orientation"] = orientation
+    if chapters is None:
+        chapters = auto_chapters(validate_segments(segments))
+    paths = render_pair(video, segments, tpl, chapters, out_dir)
+    report_path = str(Path(out_dir) / "check_report.json")
+    checks: Dict[str, int] = {}
+    if run_check:
+        report = check_frames(paths["light"]["mp4"], paths["light"]["ass"], tpl, report_path)
+        checks = report["checks"]
+    return RenderResult(
+        orientation=tpl["orientation"],
+        video=str(video),
+        ass_light=paths["light"]["ass"],
+        ass_noeffects=paths["noeffects"]["ass"],
+        mp4_light=paths["light"]["mp4"],
+        mp4_noeffects=paths["noeffects"]["mp4"],
+        report_path=report_path if run_check else None,
+        checks=checks,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -378,12 +612,18 @@ def ffprobe_size(video: str) -> Tuple[int, int]:
 def detect_orientation(video: str) -> str:
     w, h = ffprobe_size(video)
     if not w or not h:
-        raise RuntimeError(f"无法读取视频分辨率: {video}")
+        raise MediaError(f"无法读取视频分辨率（ffprobe 失败或文件不存在）: {video}")
     return "landscape" if w >= h else "portrait"
 
 
 def segments_from_srt(path: str) -> List[Dict]:
-    subs = pysubs2.load(str(path), encoding="utf-8")
+    """SRT -> segments（时间换算为秒 float）。文件缺失/解析失败抛 InputError。"""
+    if not Path(path).exists():
+        raise InputError(f"字幕文件不存在: {path}")
+    try:
+        subs = pysubs2.load(str(path), encoding="utf-8")
+    except Exception as e:
+        raise InputError(f"SRT 解析失败: {path}: {e}") from e
     return [
         {"index": i + 1, "start": e.start / 1000.0, "end": e.end / 1000.0,
          "text": e.text.replace("\n", " ").strip()}
@@ -575,6 +815,7 @@ def run_demo(out_dir: str = "demo_output") -> int:
 
 
 def main() -> int:
+    """CLI。退出码：0 成功；1 自检有违规；2 输入/媒体/渲染错误；64 参数用法错误。"""
     parser = argparse.ArgumentParser(description="D 模块 · 基础动效（见 PRD.md）")
     parser.add_argument("--demo", action="store_true", help="用内置样例独立跑通全部功能")
     parser.add_argument("--video", help="输入视频路径")
@@ -592,11 +833,23 @@ def main() -> int:
 
     if not args.video or not (args.srt or args.segments):
         parser.error("非 demo 模式需要 --video 与 --srt/--segments")
+    try:
+        rc = _run_cli(args, parser)
+    except EffectsError as e:
+        print(f"[effects] {type(e).__name__}: {e}", file=sys.stderr)
+        return 2
+    return rc
+
+
+def _run_cli(args, parser) -> int:
     if args.srt:
         segments = segments_from_srt(args.srt)
     else:
-        with open(args.segments, "r", encoding="utf-8") as f:
-            segments = json.load(f)
+        try:
+            segments = json.loads(Path(args.segments).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            raise InputError(f"segments JSON 读取失败: {args.segments}: {e}") from e
+    segments = validate_segments(segments)
     tpl = load_template(args.template)
     if args.orientation == "auto":
         tpl["orientation"] = detect_orientation(args.video)
@@ -605,8 +858,11 @@ def main() -> int:
     else:
         tpl["orientation"] = args.orientation
     if args.chapters:
-        with open(args.chapters, "r", encoding="utf-8") as f:
-            chapters = json.load(f)
+        try:
+            chapters = json.loads(Path(args.chapters).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            raise InputError(f"chapters JSON 读取失败: {args.chapters}: {e}") from e
+        chapters = validate_chapters(chapters)
     else:
         chapters = auto_chapters(segments)
         print(f"[effects] 自动生成章节 {len(chapters)} 节: "

@@ -120,13 +120,19 @@ A 的模板配置(template) ──┼──> 【D: render/effects.py】 ──> 
 
 ### 3.3 最必需的操作（v1 函数清单，全部落在 `render/effects.py`）
 
-1. `load_template(path) -> dict`：读配置、校验区间、缺字段用默认值补齐。
-2. `build_ass(segments, template, chapters, effects_on: bool) -> SSAFile`：核心。同一份输入，开关决定有无特效标签。
+1. `load_template(path) -> dict`：读配置、校验区间、缺字段用默认值补齐。参数可为 JSON 路径、dict 或 None。
+2. `build_ass(segments, template, chapters, effects_on: bool) -> SSAFile`：核心。同一份输入，开关决定有无特效标签。入口先经 `validate_segments`/`validate_chapters` 校验。
 3. `pick_highlight_word(text, glossary) -> str|None`：选词规则（见 4.2），每条最多返回 1 个词。
-4. `burn(video, ass_path, out_path) -> bool`：调 ffmpeg 单次烧录，`-c:a copy`，失败时输出 stderr 尾部。
+4. `burn(video, ass_path, out_path) -> bool`：调 ffmpeg 单次烧录，`-c:a copy`，失败抛 `RenderError`（含 stderr 尾部）。
 5. `render_pair(video, segments, template, chapters, out_dir) -> dict`：一键出「无动效/轻动效」两版成片 + 两份 ASS。
 6. `check_frames(video, ass_path, template, report_path) -> dict`：抽帧 + 几何自检，写报告。
 7. `python -m videocut.render.effects --demo`：用内置样例数据独立跑通 1–6（不依赖 A/C/B/E）。
+
+**跨模块配对接口（v1.2 新增，契约全文见 `docs/D模块_接口契约.md`）**
+
+8. `render_ass(segments, template, chapters, out_path, effects_on) -> str`：只生成 ASS，返回字幕文件路径（给 E 自行烧录用）。
+9. `render(video, segments, template, chapters, out_dir, orientation="auto", run_check=True) -> RenderResult`：顶层入口，输入 3.1 三件套 + 视频路径，返回渲染结果对象（orientation / 两版 ass / 两版 mp4 / report_path / checks / .ok）。
+10. 错误类型：`EffectsError` 基类；`InputError(ValueError)` 输入非法、`MediaError(RuntimeError)` 视频缺失或读不出、`RenderError(RuntimeError)` 烧录/落盘失败。CLI 退出码 0/1/2/64。
 
 ---
 
@@ -170,7 +176,7 @@ A 的模板配置(template) ──┼──> 【D: render/effects.py】 ──> 
 
 | 不做 | 原因/归属 |
 |---|---|
-| 与 A/C/B/E 的正式接口联调、接口格式文档 | 用户明确：v1 暂不做输入输出接口对齐；字段约定先按 3.1 内部执行 |
+| ~~与 A/C/B/E 的正式接口联调、接口格式文档~~ | **v1.2 已做**：接口契约见 `docs/D模块_接口契约.md`，配对入口 `render_ass`/`render`；字段名与 A/C 最终对齐时只需在 `load_template` 加映射层 |
 | 静态样式定义（字号/行数/边距/底板本身的生成） | 归 A（`subtitle_style.py`） |
 | 断句、标点恢复、术语表维护、时间轴重映射 | 归 C（`output/local.py`） |
 | 一键主流程、去三次确认、进度条、转录缓存 | 归 B（`cut_cmd.py`/`generate_cmd.py`） |

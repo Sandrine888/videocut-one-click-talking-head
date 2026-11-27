@@ -1,4 +1,6 @@
-"""D 模块（render/effects.py）单元测试 —— PRD AC1/AC2 的机械检查。"""
+"""D 模块（render/effects.py）单元测试 —— PRD AC1/AC2 的机械检查 + v1.2 接口契约。"""
+
+from pathlib import Path
 
 import pysubs2
 import pytest
@@ -86,3 +88,105 @@ def test_wrap_max_two_lines_demo():
     for seg in fx.DEMO_SEGMENTS:
         lines = fx.wrap_text(seg["text"], tpl["chars_per_line"]["portrait"][1])
         assert len(lines) <= 2
+
+
+# ---------------------------------------------------------------------------
+# v1.2 跨模块接口契约（docs/D模块_接口契约.md）
+# ---------------------------------------------------------------------------
+
+def test_error_hierarchy():
+    assert issubclass(fx.InputError, (fx.EffectsError, ValueError))
+    assert issubclass(fx.MediaError, (fx.EffectsError, RuntimeError))
+    assert issubclass(fx.RenderError, (fx.EffectsError, RuntimeError))
+
+
+def test_validate_segments_normalizes():
+    segs = fx.validate_segments([{"start": 0, "end": 1.5, "text": " 你好 "}])
+    assert segs == [{"index": 1, "start": 0.0, "end": 1.5, "text": "你好"}]
+
+
+@pytest.mark.parametrize("bad", [
+    [],
+    "not-a-list",
+    [{}],                                                     # 缺 start/end/text
+    [{"start": 2.0, "end": 2.0, "text": "a"}],                # end == start
+    [{"start": -1.0, "end": 2.0, "text": "a"}],               # 负时间
+    [{"start": 1.0, "end": 2.0, "text": ""}],                 # 空文本
+    [{"start": "1.0", "end": 2.0, "text": "a"}],              # 时间类型错
+    [{"index": 1.5, "start": 0.0, "end": 1.0, "text": "a"}],  # index 非整数
+])
+def test_validate_segments_errors(bad):
+    with pytest.raises(fx.InputError):
+        fx.validate_segments(bad)
+
+
+def test_validate_chapters():
+    assert fx.validate_chapters(None) == []
+    assert fx.validate_chapters([]) == []
+    with pytest.raises(fx.InputError):
+        fx.validate_chapters([{"start": 5.0, "label": "b"}, {"start": 1.0, "label": "a"}])  # 非递增
+    with pytest.raises(fx.InputError):
+        fx.validate_chapters([{"start": 1.0}])  # 缺 label
+    with pytest.raises(fx.InputError):
+        fx.validate_chapters([{"start": 1.0, "label": "  "}])  # 空白 label
+
+
+def test_build_ass_rejects_bad_inputs():
+    tpl = fx.load_template()
+    with pytest.raises(fx.InputError):
+        fx.build_ass([{"start": 1.0, "end": 2.0}], tpl)          # 缺 text
+    with pytest.raises(fx.InputError):
+        fx.build_ass(fx.DEMO_SEGMENTS, tpl, [{"start": -1, "label": "x"}])
+    with pytest.raises(fx.InputError):
+        fx.build_ass(fx.DEMO_SEGMENTS, "not-a-dict")
+
+
+def test_load_template_accepts_dict_and_validates(tmp_path):
+    tpl = fx.load_template({"effects": {"fade_in_ms": 999}})
+    assert tpl["effects"]["fade_in_ms"] == 150  # 钳制
+    assert fx.load_template({"orientation": "landscape"})["orientation"] == "landscape"
+    with pytest.raises(fx.InputError):
+        fx.load_template({"orientation": "square"})
+    with pytest.raises(fx.InputError):
+        fx.load_template({"effects": {"fade_in_ms": "fast"}})
+    with pytest.raises(fx.InputError):
+        fx.load_template(tmp_path / "missing.json")
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json", encoding="utf-8")
+    with pytest.raises(fx.InputError):
+        fx.load_template(str(bad))
+
+
+def test_render_ass_returns_existing_path(tmp_path):
+    out = tmp_path / "sub" / "x.ass"
+    p = fx.render_ass(fx.DEMO_SEGMENTS, fx.DEFAULT_TEMPLATE,
+                      fx.DEMO_CHAPTERS, out_path=str(out))
+    assert p == str(out) and Path(p).exists()
+    subs = pysubs2.load(str(out), encoding="utf-8")
+    assert len([e for e in subs if e.style == "Default"]) == len(fx.DEMO_SEGMENTS)
+    assert any(e.style == "Badge" for e in subs)
+
+
+def test_render_media_error_missing_video():
+    with pytest.raises(fx.MediaError):
+        fx.render("Z:/definitely/not/here.mp4", fx.DEMO_SEGMENTS)
+
+
+def test_burn_errors(tmp_path):
+    with pytest.raises(fx.MediaError):
+        fx.burn("Z:/nope.mp4", str(tmp_path / "a.ass"), str(tmp_path / "o.mp4"))
+    fake = tmp_path / "fake.mp4"
+    fake.write_bytes(b"not a video")
+    with pytest.raises(fx.RenderError):
+        fx.burn(str(fake), str(fake), str(tmp_path / "o.mp4"))
+
+
+def test_render_result_to_dict_shape(tmp_path):
+    res = fx.RenderResult(orientation="portrait", video="v.mp4",
+                          ass_light="l.ass", ass_noeffects="n.ass",
+                          mp4_light="l.mp4", mp4_noeffects="n.mp4",
+                          report_path=None, checks={"face_block": 0, "edge_touch": 0, "over_two_lines": 0})
+    d = res.to_dict()
+    assert set(d) == {"orientation", "video", "ass_light", "ass_noeffects",
+                      "mp4_light", "mp4_noeffects", "report_path", "checks"}
+    assert res.ok and d["checks"]["face_block"] == 0
